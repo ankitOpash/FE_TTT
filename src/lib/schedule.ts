@@ -4,15 +4,17 @@ export const STATUSES = ["scheduled", "published", "failed"] as const
 export type Platform = (typeof PLATFORMS)[number]
 export type Status = (typeof STATUSES)[number]
 
-export type Post = {
+type PostFields = {
   id: string
   content: string
   platforms: Platform[]
   mediaUrl?: string
   scheduledAt: string
-  status: Status
-  errorMessage?: string
 }
+
+export type Post =
+  | (PostFields & { status: "scheduled" | "published" })
+  | (PostFields & { status: "failed"; errorMessage: string })
 
 export const LIMITS: Record<Platform, number> = {
   x: 280,
@@ -49,8 +51,29 @@ export function sortPlatforms(platforms: Platform[]): Platform[] {
   return PLATFORMS.filter((platform) => platforms.includes(platform))
 }
 
+type GraphemeSegmenter = {
+  segment: (input: string) => Iterable<unknown>
+}
+
+function graphemeSegmenter(): GraphemeSegmenter | null {
+  const intl = Intl as typeof Intl & {
+    Segmenter?: new (locales: undefined, options: { granularity: "grapheme" }) => GraphemeSegmenter
+  }
+  return intl.Segmenter ? new intl.Segmenter(undefined, { granularity: "grapheme" }) : null
+}
+
+export function countGraphemes(content: string): number {
+  const segmenter = graphemeSegmenter()
+  if (!segmenter) return [...content].length
+  return [...segmenter.segment(content)].length
+}
+
+export function charactersLeft(content: string, platform: Platform): number {
+  return LIMITS[platform] - countGraphemes(content)
+}
+
 export function platformsOverLimit(content: string, platforms: Platform[]): Platform[] {
-  return sortPlatforms(platforms).filter((platform) => content.length > LIMITS[platform])
+  return sortPlatforms(platforms).filter((platform) => countGraphemes(content) > LIMITS[platform])
 }
 
 export function retryShouldFail(random = Math.random()): boolean {
@@ -88,8 +111,9 @@ export function scheduleBlockers(input: {
   if (!input.content.trim()) reasons.push("Write the post before scheduling it.")
   if (input.platforms.length === 0) reasons.push("Select at least one platform.")
   for (const platform of platformsOverLimit(input.content, input.platforms)) {
+    const over = countGraphemes(input.content) - LIMITS[platform]
     reasons.push(
-      `${PLATFORM_LABEL[platform]} allows ${LIMITS[platform].toLocaleString()} characters.`,
+      `${PLATFORM_LABEL[platform]} is ${over.toLocaleString()} over its ${LIMITS[platform].toLocaleString()} limit.`,
     )
   }
   const image = imageUrlError(input.mediaUrl ?? "")
@@ -115,26 +139,28 @@ export function isCurrentAttempt(active: number | undefined, attempt: number): b
   return active === attempt
 }
 
-export function settleRetrySuccess(post: Post): Post {
+export function settleRetrySuccess(post: Post, now = Date.now()): Post {
+  const when = new Date(post.scheduledAt).getTime()
+  const status = Number.isFinite(when) && when <= now ? "published" : "scheduled"
   return {
     id: post.id,
     content: post.content,
     platforms: post.platforms,
-    mediaUrl: post.mediaUrl,
+    ...(post.mediaUrl ? { mediaUrl: post.mediaUrl } : {}),
     scheduledAt: post.scheduledAt,
-    status: "scheduled",
+    status,
   }
 }
 
-export function settleRetryFailure(original: Post, message: string): Post {
+export function settleRetryFailure(original: Post): Post {
   return {
     id: original.id,
     content: original.content,
     platforms: original.platforms,
-    mediaUrl: original.mediaUrl,
+    ...(original.mediaUrl ? { mediaUrl: original.mediaUrl } : {}),
     scheduledAt: original.scheduledAt,
     status: "failed",
-    errorMessage: message,
+    errorMessage: original.status === "failed" ? original.errorMessage : RETRY_ERROR,
   }
 }
 
@@ -147,8 +173,11 @@ export function dayLabel(iso: string, now = new Date()): string {
   const today = localDayStart(now)
   const tomorrow = new Date(today)
   tomorrow.setDate(tomorrow.getDate() + 1)
+  const yesterday = new Date(today)
+  yesterday.setDate(yesterday.getDate() - 1)
   if (day === today) return "Today"
   if (day === tomorrow.getTime()) return "Tomorrow"
+  if (day === yesterday.getTime()) return "Yesterday"
   return new Date(iso).toLocaleDateString(undefined, {
     weekday: "short",
     month: "short",
@@ -192,8 +221,7 @@ export function groupPosts(posts: Post[], now = new Date()): DayGroup[] {
     })
     .map((key) => ({
       label: dayLabel(new Date(key).toISOString(), now),
-      posts: buckets
-        .get(key)!
+      posts: (buckets.get(key) ?? [])
         .slice()
         .sort((a, b) => +new Date(a.scheduledAt) - +new Date(b.scheduledAt)),
     }))
@@ -232,6 +260,30 @@ export function localInputToUtc(value: string): string {
   const time = new Date(value).getTime()
   if (!Number.isFinite(time)) return ""
   return new Date(time).toISOString()
+}
+
+export function isUtcTimestamp(value: string): boolean {
+  return Number.isFinite(Date.parse(value))
+}
+
+export function shiftNotice(requested: string, resolved: string): string {
+  if (!requested || requested === resolved) return ""
+  return `That time does not exist in your timezone. It will be saved as ${resolved.replace("T", " ")}.`
+}
+
+export function clockShiftNotice(value: string): string {
+  const iso = localInputToUtc(value)
+  if (!iso) return ""
+  return shiftNotice(value, toLocalInputValue(new Date(iso)))
+}
+
+export function mergeQuery(current: string, updates: Record<string, string>): string {
+  const next = new URLSearchParams(current)
+  for (const [key, value] of Object.entries(updates)) {
+    if (value) next.set(key, value)
+    else next.delete(key)
+  }
+  return next.toString()
 }
 
 export function formatClock(iso: string): string {

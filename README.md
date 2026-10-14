@@ -38,15 +38,16 @@ npm run lint
 
 `npm run check` typechecks `src/lib/schedule.ts` and runs `src/lib/schedule.check.ts` with Node's built-in assert. Those checks cover:
 
-- Today, Tomorrow, later dates, and earlier dates, compared on local calendar days
+- Today, Tomorrow, Yesterday, later dates, and earlier dates, compared on local calendar days
 - Character limits at the boundary: X 280/281, Instagram and TikTok 2200/2201, Facebook 5000/5001
+- Grapheme clusters: 30 family emoji count as 30, not as UTF-16 code units
 - Combined platform, status, and search filters
 - Image URL validation
 - Local date-time converted to a UTC ISO string and read back
 - Seed dates shifted from 14 October 2026 UTC onto the current UTC day
 - Retry failure when the random value is below 0.2, and success at 0.2 and above
-- Successful retry clears the error and sets status to `scheduled`
-- Failed retry restores the original post and shows the new error
+- A future failed post becomes `scheduled` on a successful retry. A past failed post becomes `published`
+- A failed retry restores the original post, including its original error message
 - A second retry claim for the same id is rejected, and a stale attempt token is ignored
 
 `npm run lint` runs ESLint. There is no separate test runner and no backend.
@@ -72,26 +73,28 @@ On a first visit the client fetches `/posts.json`, shifts the seed dates, and sa
 
 `createPost` waits 400ms, then runs the same schedule checks as the form. The first failing reason is thrown and shown on the form.
 
-`retryPost` waits 1000ms. It fails when `Math.random()` is below 0.2. Tests pass a fixed number instead of `Math.random`. A successful retry stores status `scheduled` and removes `errorMessage`. A failed retry stores the original content, platforms, time, and media, with status `failed` and the message "The platform rejected this retry. The post is still failed." The card shows "retrying" immediately, the button stays disabled until the request finishes, and a second click on the same post is ignored. An older request cannot overwrite a newer one. The optimistic change is not written until the mock call settles, so a refresh during that second can still show the previous failed post.
+`retryPost` waits 1000ms. It fails when `Math.random()` is below 0.2. Tests pass a fixed number instead of `Math.random`. The card changes as soon as Retry is clicked: a future post becomes `scheduled`, and a post whose time is already past becomes `published`. That optimistic row is not written to `localStorage` until the mock call succeeds, so a refresh during the wait still shows the failed post. On failure the original post is put back, including its original `errorMessage`. The rejection itself is a toast: "The platform rejected this retry. The post is still failed." A second click on the same post is ignored while the request is in flight. An older request cannot overwrite a newer one.
 
 ## UTC and local time
 
-`scheduledAt` is always a UTC ISO string (`...Z`). The composer reads the datetime input as the browser's local time and converts it with `localInputToUtc`. The queue prints that instant with `toLocaleTimeString`, and each day group uses the local midnight via `localDayStart`. Group order is Today, Tomorrow, later local dates ascending, then earlier dates with the most recent first. Posts inside a day are chronological.
+`scheduledAt` is always a UTC ISO string (`...Z`). The composer reads the datetime input as the browser's local time and converts it with `localInputToUtc`. If that clock time does not exist because of a daylight-saving gap, the field warns and names the time that will actually be stored. The queue prints the instant with `toLocaleTimeString`, and each day group uses the local midnight via `localDayStart`. Group order is Today, Tomorrow, later local dates ascending, then Yesterday and older dates with the most recent first. Posts inside a day are chronological.
 
 The seed file is anchored to 14 October 2026 UTC. `shiftSeed` moves every timestamp by whole UTC days so Today and Tomorrow still exist when the file is opened later. The stored field remains `scheduledAt` in UTC.
 
 ## Design
 
-Light zinc canvas, near-black text, indigo actions, and separate colors for scheduled, published, and failed. Borders stay hairline. Lucide icons are used for New post, Close, Retry, and a missing image. Platform marks are inline SVGs because Lucide does not ship those logos. Character counts use JavaScript string length and the text is never truncated to fit a limit.
+Light zinc canvas, near-black text, indigo actions, and separate colors for scheduled, published, and failed. Borders stay hairline. Lucide icons are used for New post, Close, Retry, and a missing image. Platform marks are inline SVGs because Lucide does not ship those logos. Counts use grapheme clusters (`Intl.Segmenter`), so an emoji is one character. Text is never truncated to fit a limit. Counters turn amber within 20 characters of a limit and name how far over the limit a post is.
 
 ## Assumptions
 
 - One platform and one status can be selected at a time. A platform filter matches a post that includes that platform.
-- Search is a case-insensitive trim of the post text. Platform and status changes push a history entry. Search replaces the current entry so typing does not flood the back stack.
+- Search is a case-insensitive trim of the post text. The box keeps its own text and writes `q` to the URL after a short pause, so fast typing is not dropped. Each filter change is applied on top of the latest query, not a stale copy. Platform and status changes push a history entry. Search replaces the current entry. Unknown `platform` and `status` values are removed.
 - Query names are `platform`, `status`, and `q`.
-- A successful retry is `scheduled`, not `published`. This demo does not publish.
-- An image URL is optional. It must be http or https when present, and a URL that fails to load blocks scheduling.
-- Empty content, no platform, an over-limit platform, a bad image URL, or a time that is not strictly in the future disables Schedule post.
+- The composer starts with Instagram selected. An image is optional on every platform, including Instagram. A non-http(s) URL, or one that fails to load, blocks scheduling.
+- A successful retry of a future post is `scheduled`. A successful retry of a past post is `published`, so the queue does not contain a scheduled post in the past. This demo still does not call a network to publish.
+- Empty content, no platform, an over-limit platform, a bad image URL, or a time that is not strictly in the future disables Schedule post. The empty-caption message stays quiet until there is something else to correct.
+- Closing a composer that has text, an image URL, or a changed time asks before discarding the draft.
+- Character counts are grapheme clusters. They are not X's weighted count, where a URL counts as 23 and some emoji count as 2.
 - There is no login.
 
 ## Deployment

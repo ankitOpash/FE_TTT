@@ -1,30 +1,47 @@
 import assert from "node:assert/strict"
 import {
   claimRetry,
+  clockShiftNotice,
+  countGraphemes,
   dayLabel,
   filterPosts,
   groupPosts,
   imageUrlError,
   isCurrentAttempt,
   localInputToUtc,
+  mergeQuery,
   platformsOverLimit,
   releaseRetry,
-  RETRY_ERROR,
   retryShouldFail,
   scheduleBlockers,
   settleRetryFailure,
   settleRetrySuccess,
+  shiftNotice,
   shiftSeed,
   toLocalInputValue,
   type Post,
 } from "./schedule"
 
-function post(partial: Pick<Post, "id" | "scheduledAt" | "status"> & Partial<Post>): Post {
-  return {
+function post(partial: {
+  id: string
+  scheduledAt: string
+  status: Post["status"]
+  content?: string
+  platforms?: Post["platforms"]
+  errorMessage?: string
+  mediaUrl?: string
+}): Post {
+  const base = {
+    id: partial.id,
     content: partial.content ?? "Hello",
-    platforms: partial.platforms ?? ["x"],
-    ...partial,
+    platforms: partial.platforms ?? (["x"] as Post["platforms"]),
+    scheduledAt: partial.scheduledAt,
+    ...(partial.mediaUrl ? { mediaUrl: partial.mediaUrl } : {}),
   }
+  if (partial.status === "failed") {
+    return { ...base, status: "failed", errorMessage: partial.errorMessage ?? "Failed" }
+  }
+  return { ...base, status: partial.status }
 }
 
 const now = new Date(2026, 9, 14, 12, 0, 0, 0)
@@ -32,8 +49,7 @@ const at = (day: number, hour: number) => new Date(2026, 9, day, hour, 0, 0, 0).
 
 assert.equal(dayLabel(at(14, 15), now), "Today")
 assert.equal(dayLabel(at(15, 9), now), "Tomorrow")
-assert.equal(dayLabel(at(13, 9), now) === "Today", false)
-assert.equal(dayLabel(at(13, 9), now) === "Tomorrow", false)
+assert.equal(dayLabel(at(13, 9), now), "Yesterday")
 
 const groups = groupPosts(
   [
@@ -65,6 +81,11 @@ assert.deepEqual(platformsOverLimit("a".repeat(2201), ["tiktok", "instagram", "f
 ])
 assert.deepEqual(platformsOverLimit("a".repeat(5000), ["facebook"]), [])
 assert.deepEqual(platformsOverLimit("a".repeat(5001), ["facebook"]), ["facebook"])
+const family = "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}\u{1F466}"
+assert.equal(countGraphemes(family.repeat(30)), 30)
+assert.equal(family.repeat(30).length > 280, true)
+assert.deepEqual(platformsOverLimit(family.repeat(30), ["x"]), [])
+assert.deepEqual(platformsOverLimit(family.repeat(281), ["x"]), ["x"])
 
 const future = at(14, 18)
 const blockersNow = now.getTime()
@@ -160,16 +181,29 @@ const failed = post({
   platforms: ["tiktok"],
   errorMessage: "Old failure",
 })
-const succeeded = settleRetrySuccess(failed)
+const succeeded = settleRetrySuccess(failed, blockersNow)
 assert.equal(succeeded.status, "scheduled")
-assert.equal(succeeded.errorMessage, undefined)
+assert.equal("errorMessage" in succeeded, false)
 assert.equal(succeeded.content, "Keep this copy")
 assert.equal(succeeded.scheduledAt, failed.scheduledAt)
-const rolled = settleRetryFailure(failed, RETRY_ERROR)
+const pastFailed = post({
+  id: "past-failed",
+  scheduledAt: at(11, 9),
+  status: "failed",
+  errorMessage: "Old failure",
+})
+assert.equal(settleRetrySuccess(pastFailed, now.getTime()).status, "published")
+const rolled = settleRetryFailure(failed)
 assert.equal(rolled.status, "failed")
-assert.equal(rolled.errorMessage, RETRY_ERROR)
+assert.equal(rolled.errorMessage, "Old failure")
 assert.equal(rolled.content, failed.content)
 assert.equal(rolled.platforms[0], "tiktok")
+const stacked = mergeQuery(mergeQuery("", { platform: "tiktok" }), { status: "scheduled" })
+assert.equal(new URLSearchParams(stacked).get("platform"), "tiktok")
+assert.equal(new URLSearchParams(stacked).get("status"), "scheduled")
+assert.equal(shiftNotice("2027-03-14T02:30", "2027-03-14T03:30").includes("03:30"), true)
+assert.equal(shiftNotice("2027-03-14T02:30", "2027-03-14T02:30"), "")
+assert.equal(clockShiftNotice(toLocalInputValue(local)), "")
 assert.equal(claimRetry([], "failed")?.includes("failed"), true)
 assert.equal(claimRetry(["failed"], "failed"), null)
 assert.deepEqual(releaseRetry(["failed", "other"], "failed"), ["other"])

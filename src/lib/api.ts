@@ -1,12 +1,12 @@
 import {
   PLATFORMS,
   RETRY_ERROR,
+  isUtcTimestamp,
   retryShouldFail,
   scheduleBlockers,
   shiftSeed,
   type Platform,
   type Post,
-  type Status,
 } from "./schedule"
 
 const STORAGE_KEY = "dispatch.posts.v1"
@@ -36,20 +36,34 @@ function parsePosts(value: unknown): Post[] {
       typeof row.id !== "string" ||
       typeof row.content !== "string" ||
       typeof row.scheduledAt !== "string" ||
+      !isUtcTimestamp(row.scheduledAt) ||
       (status !== "scheduled" && status !== "published" && status !== "failed")
     ) {
       throw new Error("Could not load the queue.")
     }
-    const post: Post = {
+    const mediaUrl = typeof row.mediaUrl === "string" && row.mediaUrl ? row.mediaUrl : undefined
+    if (status === "failed") {
+      if (typeof row.errorMessage !== "string" || !row.errorMessage) {
+        throw new Error("Could not load the queue.")
+      }
+      return {
+        id: row.id,
+        content: row.content,
+        platforms,
+        ...(mediaUrl ? { mediaUrl } : {}),
+        scheduledAt: row.scheduledAt,
+        status,
+        errorMessage: row.errorMessage,
+      }
+    }
+    return {
       id: row.id,
       content: row.content,
       platforms,
+      ...(mediaUrl ? { mediaUrl } : {}),
       scheduledAt: row.scheduledAt,
-      status: status as Status,
+      status,
     }
-    if (typeof row.mediaUrl === "string" && row.mediaUrl) post.mediaUrl = row.mediaUrl
-    if (typeof row.errorMessage === "string" && row.errorMessage) post.errorMessage = row.errorMessage
-    return post
   })
 }
 
