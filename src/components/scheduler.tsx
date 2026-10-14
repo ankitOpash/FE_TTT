@@ -3,7 +3,7 @@
 import { Component, useCallback, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { ImageOff, Plus, RefreshCw, X } from "lucide-react"
-import { clearPosts, createPost, fetchPosts, retryPost, savePosts } from "@/lib/api"
+import { clearPosts, createPost, fetchPosts, invalidateQueue, queueToken, retryPost } from "@/lib/api"
 import {
   asPlatform,
   asStatus,
@@ -63,11 +63,8 @@ export default function Scheduler() {
   const [pendingIds, setPendingIds] = useState<string[]>([])
   const pendingRef = useRef<string[]>([])
   const attempts = useRef(new Map<string, number>())
-  const loadEpoch = useRef(0)
   const toastSeq = useRef(0)
   const toastFocus = useRef(false)
-  const postsRef = useRef<Post[] | null>(null)
-  const originals = useRef(new Map<string, Post>())
   const toastRef = useRef<HTMLDivElement>(null)
   const paramsRef = useRef(searchParams.toString())
   const sentQuery = useRef(query)
@@ -126,31 +123,16 @@ export default function Scheduler() {
     return () => window.clearTimeout(timer)
   }, [toast])
 
-  function setQueue(next: Post[], persist: boolean) {
-    if (postsRef.current == null) return
-    postsRef.current = next
-    setPosts(next)
-    if (!persist) return
-    savePosts(next.map((item) => originals.current.get(item.id) ?? item))
-  }
-
-  function queueReady(epoch: number): Post[] | null {
-    if (epoch !== loadEpoch.current) return null
-    return postsRef.current
-  }
-
   useEffect(() => {
     let gone = false
     fetchPosts(forceError).then(
       (data) => {
         if (gone) return
-        postsRef.current = data
         setPosts(data)
         setPhase("ready")
       },
       (error: unknown) => {
         if (gone) return
-        postsRef.current = null
         setPosts(null)
         setLoadError(error instanceof Error ? error.message : "Could not load the queue.")
         setPhase("error")
@@ -162,11 +144,10 @@ export default function Scheduler() {
   }, [forceError, tick])
 
   async function onCreate(post: Post) {
-    const epoch = loadEpoch.current
-    await createPost(post)
-    const current = queueReady(epoch)
-    if (!current) return
-    setQueue([post, ...current], true)
+    const token = queueToken()
+    const saved = await createPost(post, token)
+    if (!saved || queueToken() !== token) return
+    setPosts((current) => (current ? [saved, ...current.filter((item) => item.id !== saved.id)] : current))
     setComposerOpen(false)
     showToast("Scheduled. The post is on the queue.", "success", false)
   }
@@ -174,48 +155,32 @@ export default function Scheduler() {
   async function onRetry(post: Post) {
     const claimed = claimRetry(pendingRef.current, post.id)
     if (!claimed) return
-    const epoch = loadEpoch.current
+    const token = queueToken()
     pendingRef.current = claimed
     const attempt = (attempts.current.get(post.id) ?? 0) + 1
     attempts.current.set(post.id, attempt)
     setPendingIds(claimed)
-    originals.current.set(post.id, post)
     const optimistic = settleRetrySuccess(post, Date.now())
     const leaveFailedFilter = status === "failed"
-    const starting = queueReady(epoch)
-    if (!starting) {
-      pendingRef.current = releaseRetry(pendingRef.current, post.id)
-      setPendingIds(pendingRef.current)
-      return
-    }
-    setQueue(
-      starting.map((item) => (item.id === post.id ? optimistic : item)),
-      false,
-    )
+    setPosts((current) => current?.map((item) => (item.id === post.id ? optimistic : item)) ?? current)
     try {
-      await retryPost()
-      const current = queueReady(epoch)
-      if (!current || !isCurrentAttempt(attempts.current.get(post.id), attempt)) return
-      originals.current.delete(post.id)
-      setQueue(
-        current.map((item) => (item.id === post.id ? optimistic : item)),
-        true,
-      )
-      const outcome = optimistic.status === "published" ? "marked published" : "back on the queue"
+      const updated = await retryPost(post.id, token)
+      if (queueToken() !== token || !isCurrentAttempt(attempts.current.get(post.id), attempt)) return
+      if (!updated) {
+        setPosts((current) => current?.map((item) => (item.id === post.id ? post : item)) ?? current)
+        return
+      }
+      setPosts((current) => current?.map((item) => (item.id === updated.id ? updated : item)) ?? current)
+      const outcome = updated.status === "published" ? "marked published" : "back on the queue"
       showToast(`Retry saved. ${clip(post.content)} is ${outcome}.`, "success", leaveFailedFilter)
     } catch (error) {
-      const current = queueReady(epoch)
-      if (!current || !isCurrentAttempt(attempts.current.get(post.id), attempt)) return
+      if (queueToken() !== token || !isCurrentAttempt(attempts.current.get(post.id), attempt)) return
       const restored = settleRetryFailure(post)
-      setQueue(
-        current.map((item) => (item.id === post.id ? restored : item)),
-        true,
-      )
-      originals.current.delete(post.id)
+      setPosts((current) => current?.map((item) => (item.id === post.id ? restored : item)) ?? current)
       const message = error instanceof Error ? error.message : "Retry failed."
       showToast(message, "error", true)
     } finally {
-      if (epoch !== loadEpoch.current) return
+      if (queueToken() !== token) return
       if (isCurrentAttempt(attempts.current.get(post.id), attempt)) {
         const released = releaseRetry(pendingRef.current, post.id)
         pendingRef.current = released
@@ -225,11 +190,9 @@ export default function Scheduler() {
   }
 
   function abandonQueue() {
-    loadEpoch.current += 1
+    invalidateQueue()
     pendingRef.current = []
     setPendingIds([])
-    originals.current.clear()
-    postsRef.current = null
     setPosts(null)
   }
 

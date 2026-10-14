@@ -1,5 +1,8 @@
 import assert from "node:assert/strict"
 import {
+  applyStoredCreate,
+  applyStoredRetry,
+  canSaveQueue,
   claimRetry,
   clockShiftNotice,
   countGraphemes,
@@ -160,6 +163,8 @@ const held = visiblePosts(
   ["pending"],
 )
 assert.deepEqual(held.map((item) => item.id), ["stay", "pending"])
+assert.equal(canSaveQueue(1, 1, []), true)
+assert.equal(canSaveQueue(1, 1, null), false)
 assert.deepEqual(
   filterPosts(
     [post({ id: "mix", scheduledAt: future, status: "scheduled", content: "Launch notes", platforms: ["x"] })],
@@ -204,6 +209,16 @@ const pastFailed = post({
   errorMessage: "Old failure",
 })
 assert.equal(settleRetrySuccess(pastFailed, now.getTime()).status, "published")
+assert.equal(canSaveQueue(1, 2, [failed]), false)
+assert.equal(applyStoredCreate(null, failed), null)
+assert.equal(applyStoredRetry(null, "failed", blockersNow), null)
+const created = applyStoredCreate([failed], post({ id: "new", scheduledAt: future, status: "scheduled" }))
+assert.equal(created?.[0].id, "new")
+assert.equal(created?.[1].status, "failed")
+assert.equal(created?.[1].status === "failed" ? created[1].errorMessage : "", "Old failure")
+const retried = applyStoredRetry([failed], "failed", blockersNow)
+assert.equal(retried?.[0].status, "scheduled")
+assert.equal(applyStoredRetry([failed], "missing", blockersNow), null)
 const rolled = settleRetryFailure(failed)
 assert.equal(rolled.status, "failed")
 assert.equal(rolled.errorMessage, "Old failure")

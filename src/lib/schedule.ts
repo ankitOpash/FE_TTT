@@ -239,6 +239,23 @@ function matchesFilters(post: Post, filters: Filters, needle = filters.q.trim().
   return true
 }
 
+export function canSaveQueue(startedAt: number, currentToken: number, posts: Post[] | null): boolean {
+  return startedAt === currentToken && posts != null
+}
+
+export function applyStoredCreate(posts: Post[] | null, post: Post): Post[] | null {
+  if (posts == null) return null
+  return [post, ...posts.filter((item) => item.id !== post.id)]
+}
+
+export function applyStoredRetry(posts: Post[] | null, id: string, now = Date.now()): Post[] | null {
+  if (posts == null) return null
+  const original = posts.find((item) => item.id === id)
+  if (!original || original.status !== "failed") return null
+  const updated = settleRetrySuccess(original, now)
+  return posts.map((item) => (item.id === id ? updated : item))
+}
+
 export function visiblePosts(posts: Post[], filters: Filters, pendingIds: readonly string[] = []): Post[] {
   const pending = new Set(pendingIds)
   const matched = filterPosts(posts, filters)

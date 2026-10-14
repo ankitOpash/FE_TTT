@@ -71,9 +71,9 @@ The dashboard is one client component. Filtering and date grouping stay in pure 
 
 On a first visit the client fetches `/posts.json`, shifts the seed dates, and saves the result. After that, `localStorage` key `dispatch.posts.v1` is the source of truth. Reset demo data deletes that key and loads the file again.
 
-`createPost` waits 400ms, then runs the same schedule checks as the form. The first failing reason is thrown and shown on the form.
+`createPost` waits 400ms, then runs the same schedule checks as the form. The first failing reason is thrown and shown on the form. On success the mock API reads the stored queue, prepends the post, and writes it back. It does not write if the queue was reset while it was waiting, or if storage is missing.
 
-`retryPost` waits 1000ms. It fails when `Math.random()` is below 0.2. Tests pass a fixed number instead of `Math.random`. The card changes as soon as Retry is clicked: a future post becomes `scheduled`, and a post whose time is already past becomes `published`. That optimistic row is not written to `localStorage` until the mock call succeeds, so a refresh during the wait still shows the failed post. On failure the original post is put back, including its original `errorMessage`. The rejection itself is a toast: "The platform rejected this retry. The post is still failed." A second click on the same post is ignored while the request is in flight. An older request cannot overwrite a newer one.
+`retryPost` takes the post id and waits 1000ms. It fails when `Math.random()` is below 0.2. Tests pass a fixed number instead of `Math.random`. The card changes as soon as Retry is clicked: a future post becomes `scheduled`, and a post whose time is already past becomes `published`. That optimistic row is not written until the mock call succeeds, so a refresh during the wait still shows the failed post. On failure storage is left untouched, the original post is put back on screen, including its original `errorMessage`, and a toast says "The platform rejected this retry. The post is still failed." A reset during the wait bumps a token and the late call does not save. A second click on the same post is ignored while the request is in flight. An older request cannot overwrite a newer one.
 
 ## UTC and local time
 

@@ -1,6 +1,9 @@
 import {
   PLATFORMS,
   RETRY_ERROR,
+  applyStoredCreate,
+  applyStoredRetry,
+  canSaveQueue,
   isUtcTimestamp,
   retryShouldFail,
   scheduleBlockers,
@@ -8,6 +11,17 @@ import {
   type Platform,
   type Post,
 } from "./schedule"
+
+let queueRevision = 0
+
+export function queueToken(): number {
+  return queueRevision
+}
+
+export function invalidateQueue(): number {
+  queueRevision += 1
+  return queueRevision
+}
 
 const STORAGE_KEY = "dispatch.posts.v1"
 const LOAD_MS = 700
@@ -73,7 +87,7 @@ function readStored(): Post[] | null {
   return parsePosts(JSON.parse(raw))
 }
 
-export function savePosts(posts: Post[]) {
+function savePosts(posts: Post[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(posts))
 }
 
@@ -101,7 +115,7 @@ export async function fetchPosts(forceError = false): Promise<Post[]> {
   return posts
 }
 
-export async function createPost(post: Post, now = Date.now()): Promise<void> {
+export async function createPost(post: Post, token = queueToken(), now = Date.now()): Promise<Post | null> {
   await wait(CREATE_MS)
   const reasons = scheduleBlockers({
     content: post.content,
@@ -111,9 +125,23 @@ export async function createPost(post: Post, now = Date.now()): Promise<void> {
     now,
   })
   if (reasons.length > 0) throw new Error(reasons[0])
+  const next = applyStoredCreate(readStored(), post)
+  if (!canSaveQueue(token, queueRevision, next) || !next) return null
+  savePosts(next)
+  return post
 }
 
-export async function retryPost(random = Math.random()): Promise<void> {
+export async function retryPost(
+  id: string,
+  token = queueToken(),
+  random = Math.random(),
+  now = Date.now(),
+): Promise<Post | null> {
   await wait(RETRY_MS)
   if (retryShouldFail(random)) throw new Error(RETRY_ERROR)
+  const next = applyStoredRetry(readStored(), id, now)
+  if (!canSaveQueue(token, queueRevision, next) || !next) return null
+  savePosts(next)
+  const saved = next.find((item) => item.id === id)
+  return saved ?? null
 }
