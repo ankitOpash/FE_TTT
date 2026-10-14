@@ -2,19 +2,26 @@
 
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import { ImageOff, Plus, RefreshCw, X } from "lucide-react"
 import { clearPosts, createPost, fetchPosts, retryPost, savePosts } from "@/lib/api"
 import {
   asPlatform,
   asStatus,
+  claimRetry,
   filterPosts,
   formatClock,
   groupPosts,
+  imageUrlError,
+  isCurrentAttempt,
   LIMITS,
   localInputToUtc,
   localZoneLabel,
   PLATFORM_LABEL,
   PLATFORMS,
+  releaseRetry,
   scheduleBlockers,
+  settleRetryFailure,
+  settleRetrySuccess,
   sortPlatforms,
   STATUSES,
   toLocalInputValue,
@@ -35,17 +42,22 @@ export default function Scheduler() {
   const [loadError, setLoadError] = useState("")
   const [tick, setTick] = useState(0)
   const [composerOpen, setComposerOpen] = useState(false)
-  const [retryingId, setRetryingId] = useState<string | null>(null)
+  const closeComposer = useCallback(() => setComposerOpen(false), [])
+  const [pendingIds, setPendingIds] = useState<string[]>([])
+  const pendingRef = useRef<string[]>([])
+  const attempts = useRef(new Map<string, number>())
 
   const replaceParams = useCallback(
-    (updates: Record<string, string>) => {
+    (updates: Record<string, string>, history: "push" | "replace" = "replace") => {
       const next = new URLSearchParams(searchParams.toString())
       for (const [key, value] of Object.entries(updates)) {
         if (value) next.set(key, value)
         else next.delete(key)
       }
       const qs = next.toString()
-      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+      const href = qs ? `${pathname}?${qs}` : pathname
+      if (history === "push") router.push(href, { scroll: false })
+      else router.replace(href, { scroll: false })
     },
     [pathname, router, searchParams],
   )
@@ -71,7 +83,7 @@ export default function Scheduler() {
   }, [forceError, tick])
 
   async function onCreate(post: Post) {
-    await createPost()
+    await createPost(post)
     setPosts((current) => {
       const next = [post, ...(current ?? [])]
       savePosts(next)
@@ -81,33 +93,38 @@ export default function Scheduler() {
   }
 
   async function onRetry(post: Post) {
-    if (retryingId) return
-    setRetryingId(post.id)
-    setPosts((current) =>
-      (current ?? []).map((item) =>
-        item.id === post.id ? { ...item, status: "scheduled", errorMessage: undefined } : item,
-      ),
-    )
+    const claimed = claimRetry(pendingRef.current, post.id)
+    if (!claimed) return
+    pendingRef.current = claimed
+    const attempt = (attempts.current.get(post.id) ?? 0) + 1
+    attempts.current.set(post.id, attempt)
+    setPendingIds(claimed)
     try {
       await retryPost()
+      if (!isCurrentAttempt(attempts.current.get(post.id), attempt)) return
       setPosts((current) => {
         const next = (current ?? []).map((item) =>
-          item.id === post.id ? { ...post, status: "scheduled" as const, errorMessage: undefined } : item,
+          item.id === post.id ? settleRetrySuccess(post) : item,
         )
         savePosts(next)
         return next
       })
     } catch (error) {
+      if (!isCurrentAttempt(attempts.current.get(post.id), attempt)) return
       const message = error instanceof Error ? error.message : "Retry failed."
       setPosts((current) => {
         const next = (current ?? []).map((item) =>
-          item.id === post.id ? { ...post, errorMessage: message } : item,
+          item.id === post.id ? settleRetryFailure(post, message) : item,
         )
         savePosts(next)
         return next
       })
     } finally {
-      setRetryingId(null)
+      if (isCurrentAttempt(attempts.current.get(post.id), attempt)) {
+        const released = releaseRetry(pendingRef.current, post.id)
+        pendingRef.current = released
+        setPendingIds(released)
+      }
     }
   }
 
@@ -132,13 +149,13 @@ export default function Scheduler() {
 
   return (
     <div className="app">
-      <header className="top">
-        <div>
+      <header className="nav">
+        <div className="brand">
           <p className="kicker">Social queue</p>
           <h1>Dispatch</h1>
-          <p className="lede">Compose once, pick the channels, and keep the week in one list.</p>
         </div>
         <button type="button" className="primary" onClick={() => setComposerOpen(true)} disabled={phase !== "ready"}>
+          <Plus size={16} aria-hidden="true" />
           New post
         </button>
       </header>
@@ -163,7 +180,7 @@ export default function Scheduler() {
               Platform
               <select
                 value={platform}
-                onChange={(event) => replaceParams({ platform: event.target.value })}
+                onChange={(event) => replaceParams({ platform: event.target.value }, "push")}
               >
                 <option value="">All platforms</option>
                 {PLATFORMS.map((item) => (
@@ -175,7 +192,7 @@ export default function Scheduler() {
             </label>
             <label>
               Status
-              <select value={status} onChange={(event) => replaceParams({ status: event.target.value })}>
+              <select value={status} onChange={(event) => replaceParams({ status: event.target.value }, "push")}>
                 <option value="">All statuses</option>
                 {STATUSES.map((item) => (
                   <option key={item} value={item}>
@@ -197,7 +214,7 @@ export default function Scheduler() {
             <button
               type="button"
               className="text-button"
-              onClick={() => replaceParams({ platform: "", status: "", q: "" })}
+              onClick={() => replaceParams({ platform: "", status: "", q: "" }, "push")}
             >
               Clear filters
             </button>
@@ -207,7 +224,8 @@ export default function Scheduler() {
           </button>
         </aside>
 
-        <main className="queue" aria-live="polite">
+        <main className="queue" aria-live="polite" aria-busy={phase === "loading"}>
+          <p className="lede">Compose once, pick the channels, and keep the week in one list.</p>
           {phase === "loading" ? <Loading /> : null}
           {phase === "error" ? (
             <div className="state">
@@ -240,7 +258,7 @@ export default function Scheduler() {
                 <button
                   type="button"
                   className="primary"
-                  onClick={() => replaceParams({ platform: "", status: "", q: "" })}
+                  onClick={() => replaceParams({ platform: "", status: "", q: "" }, "push")}
                 >
                   Clear filters
                 </button>
@@ -263,7 +281,7 @@ export default function Scheduler() {
                       <PostCard
                         key={post.id}
                         post={post}
-                        retrying={retryingId === post.id}
+                        retrying={pendingIds.includes(post.id)}
                         onRetry={onRetry}
                       />
                     ))}
@@ -275,7 +293,7 @@ export default function Scheduler() {
       </div>
 
       {composerOpen ? (
-        <Composer onClose={() => setComposerOpen(false)} onCreate={onCreate} />
+        <Composer onClose={closeComposer} onCreate={onCreate} />
       ) : null}
     </div>
   )
@@ -303,10 +321,10 @@ function PostCard({
 }) {
   const [broken, setBroken] = useState(false)
   return (
-    <article className="card" data-status={post.status}>
+    <article className="card" data-status={post.status} aria-busy={retrying}>
       <div className="card-top">
         <time dateTime={post.scheduledAt}>{formatClock(post.scheduledAt)}</time>
-        <span className={`pill pill-${post.status}`}>{retrying ? "retrying" : post.status}</span>
+        <span className={`pill pill-${retrying ? "retrying" : post.status}`}>{retrying ? "retrying" : post.status}</span>
       </div>
       <p className="preview">{post.content}</p>
       {post.mediaUrl && !broken ? (
@@ -317,6 +335,7 @@ function PostCard({
           onError={() => setBroken(true)}
         />
       ) : null}
+      {post.mediaUrl && broken ? <p className="hint">Image unavailable.</p> : null}
       <ul className="platforms">
         {sortPlatforms(post.platforms).map((platform) => (
           <li key={platform}>
@@ -325,14 +344,16 @@ function PostCard({
           </li>
         ))}
       </ul>
-      {post.status === "failed" && post.errorMessage ? (
+      {retrying ? <p className="hint">Retrying this post…</p> : null}
+      {post.status === "failed" && post.errorMessage && !retrying ? (
         <p className="error-line" role="status">
           {post.errorMessage}
         </p>
       ) : null}
       {post.status === "failed" ? (
         <button type="button" className="retry" onClick={() => onRetry(post)} disabled={retrying}>
-          Retry
+          <RefreshCw size={16} aria-hidden="true" />
+          {retrying ? "Retrying" : "Retry"}
         </button>
       ) : null}
     </article>
@@ -347,31 +368,60 @@ function Composer({
   onCreate: (post: Post) => Promise<void>
 }) {
   const titleId = useId()
+  const imageErrorId = useId()
   const fieldRef = useRef<HTMLTextAreaElement>(null)
+  const dialogRef = useRef<HTMLFormElement>(null)
   const [content, setContent] = useState("")
   const [platforms, setPlatforms] = useState<Platform[]>(["instagram"])
   const [mediaUrl, setMediaUrl] = useState("")
+  const [imageBroken, setImageBroken] = useState(false)
   const [when, setWhen] = useState(() => toLocalInputValue(new Date(Date.now() + 60 * 60 * 1000)))
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState("")
   const [min] = useState(() => toLocalInputValue(new Date(Date.now() + 60 * 1000)))
   const scheduledAt = localInputToUtc(when)
-  const blockers = scheduleBlockers({ content, platforms, scheduledAt })
+  const imageError = imageUrlError(mediaUrl) || (mediaUrl.trim() && imageBroken ? "That image URL did not load." : "")
+  const blockers = [
+    ...scheduleBlockers({ content, platforms, scheduledAt, mediaUrl }),
+    ...(imageBroken && mediaUrl.trim() ? ["That image URL did not load."] : []),
+  ]
 
   useEffect(() => {
     fieldRef.current?.focus()
   }, [])
 
   useEffect(() => {
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
     const previous = document.body.style.overflow
     document.body.style.overflow = "hidden"
     function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose()
+      if (event.key === "Escape") {
+        onClose()
+        return
+      }
+      if (event.key !== "Tab") return
+      const dialog = dialogRef.current
+      if (!dialog) return
+      const items = [...dialog.querySelectorAll<HTMLElement>("button, input, textarea, select, a[href]")].filter(
+        (node) => !node.hidden && !node.hasAttribute("disabled"),
+      )
+      if (items.length === 0) return
+      const first = items[0]
+      const last = items[items.length - 1]
+      const active = document.activeElement
+      if (event.shiftKey && (active === first || !dialog.contains(active))) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && (active === last || !dialog.contains(active))) {
+        event.preventDefault()
+        first.focus()
+      }
     }
     window.addEventListener("keydown", onKey)
     return () => {
       document.body.style.overflow = previous
       window.removeEventListener("keydown", onKey)
+      previousFocus?.focus()
     }
   }, [onClose])
 
@@ -401,6 +451,7 @@ function Composer({
     <div className="composer">
       <button type="button" className="backdrop" aria-label="Close composer" onClick={onClose} />
       <form
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
@@ -410,6 +461,7 @@ function Composer({
         <div className="dialog-head">
           <h2 id={titleId}>New post</h2>
           <button type="button" className="text-button" onClick={onClose}>
+            <X size={16} aria-hidden="true" />
             Close
           </button>
         </div>
@@ -475,12 +527,24 @@ function Composer({
           Image URL
           <input
             value={mediaUrl}
-            onChange={(event) => setMediaUrl(event.target.value)}
+            onChange={(event) => {
+              setMediaUrl(event.target.value)
+              setImageBroken(false)
+            }}
             placeholder="https://example.com/photo.jpg"
             inputMode="url"
+            aria-invalid={Boolean(imageError)}
+            aria-describedby={imageError ? imageErrorId : undefined}
           />
         </label>
-        {mediaUrl.trim() ? <MediaPreview url={mediaUrl.trim()} /> : null}
+        {imageError ? (
+          <p id={imageErrorId} className="error-line">
+            {imageError}
+          </p>
+        ) : null}
+        {mediaUrl.trim() && !imageUrlError(mediaUrl) ? (
+          <MediaPreview url={mediaUrl.trim()} onBroken={() => setImageBroken(true)} />
+        ) : null}
         <label>
           Schedule
           <input type="datetime-local" value={when} min={min} onChange={(event) => setWhen(event.target.value)} required />
@@ -493,7 +557,11 @@ function Composer({
             ))}
           </ul>
         ) : null}
-        {formError ? <p className="error-line">{formError}</p> : null}
+        {formError ? (
+          <p className="error-line" role="alert">
+            {formError}
+          </p>
+        ) : null}
         <button type="submit" className="primary" disabled={blockers.length > 0 || saving}>
           {saving ? "Scheduling…" : "Schedule post"}
         </button>
@@ -502,10 +570,26 @@ function Composer({
   )
 }
 
-function MediaPreview({ url }: { url: string }) {
+function MediaPreview({ url, onBroken }: { url: string; onBroken: () => void }) {
   const [broken, setBroken] = useState(false)
-  if (broken) return <p className="hint">That image URL did not load. You can still schedule the post.</p>
-  return <img className="preview-image" src={url} alt="" onError={() => setBroken(true)} />
+  if (broken) {
+    return (
+      <p className="hint">
+        <ImageOff size={16} aria-hidden="true" /> Image unavailable.
+      </p>
+    )
+  }
+  return (
+    <img
+      className="preview-image"
+      src={url}
+      alt=""
+      onError={() => {
+        setBroken(true)
+        onBroken()
+      }}
+    />
+  )
 }
 
 function PlatformIcon({ platform }: { platform: Platform }) {

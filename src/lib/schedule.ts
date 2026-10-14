@@ -62,10 +62,25 @@ export function isFutureTime(iso: string, now = Date.now()): boolean {
   return Number.isFinite(time) && time > now
 }
 
+export function imageUrlError(value: string): string {
+  const trimmed = value.trim()
+  if (!trimmed) return ""
+  try {
+    const url = new URL(trimmed)
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return "Use an http or https image URL."
+    }
+  } catch {
+    return "Enter a full image URL, including https://."
+  }
+  return ""
+}
+
 export function scheduleBlockers(input: {
   content: string
   platforms: Platform[]
   scheduledAt: string
+  mediaUrl?: string
   now?: number
 }): string[] {
   const now = input.now ?? Date.now()
@@ -77,10 +92,50 @@ export function scheduleBlockers(input: {
       `${PLATFORM_LABEL[platform]} allows ${LIMITS[platform].toLocaleString()} characters.`,
     )
   }
+  const image = imageUrlError(input.mediaUrl ?? "")
+  if (image) reasons.push(image)
   if (!input.scheduledAt || !isFutureTime(input.scheduledAt, now)) {
     reasons.push("Choose a time in the future.")
   }
   return reasons
+}
+
+export const RETRY_ERROR = "The platform rejected this retry. The post is still failed."
+
+export function claimRetry(pendingIds: readonly string[], id: string): string[] | null {
+  if (pendingIds.includes(id)) return null
+  return [...pendingIds, id]
+}
+
+export function releaseRetry(pendingIds: readonly string[], id: string): string[] {
+  return pendingIds.filter((item) => item !== id)
+}
+
+export function isCurrentAttempt(active: number | undefined, attempt: number): boolean {
+  return active === attempt
+}
+
+export function settleRetrySuccess(post: Post): Post {
+  return {
+    id: post.id,
+    content: post.content,
+    platforms: post.platforms,
+    mediaUrl: post.mediaUrl,
+    scheduledAt: post.scheduledAt,
+    status: "scheduled",
+  }
+}
+
+export function settleRetryFailure(original: Post, message: string): Post {
+  return {
+    id: original.id,
+    content: original.content,
+    platforms: original.platforms,
+    mediaUrl: original.mediaUrl,
+    scheduledAt: original.scheduledAt,
+    status: "failed",
+    errorMessage: message,
+  }
 }
 
 export function localDayStart(date: Date): number {

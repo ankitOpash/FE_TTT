@@ -1,12 +1,19 @@
 import assert from "node:assert/strict"
 import {
+  claimRetry,
   dayLabel,
   filterPosts,
   groupPosts,
+  imageUrlError,
+  isCurrentAttempt,
   localInputToUtc,
   platformsOverLimit,
+  releaseRetry,
+  RETRY_ERROR,
   retryShouldFail,
   scheduleBlockers,
+  settleRetryFailure,
+  settleRetrySuccess,
   shiftSeed,
   toLocalInputValue,
   type Post,
@@ -121,5 +128,52 @@ const visible = filterPosts(
   { platform: "x", status: "failed", q: "launch" },
 )
 assert.deepEqual(visible.map((item) => item.id), ["a"])
+assert.deepEqual(
+  filterPosts(
+    [post({ id: "mix", scheduledAt: future, status: "scheduled", content: "Launch notes", platforms: ["x"] })],
+    { platform: "instagram", status: "", q: "launch" },
+  ),
+  [],
+)
+
+assert.equal(imageUrlError(""), "")
+assert.equal(imageUrlError("  "), "")
+assert.equal(imageUrlError("https://picsum.photos/id/1015/960/640"), "")
+assert.equal(imageUrlError("notaurl").includes("https://"), true)
+assert.equal(imageUrlError("ftp://files.example/photo.jpg").includes("http"), true)
+assert.equal(
+  scheduleBlockers({
+    content: "Hello",
+    platforms: ["facebook"],
+    scheduledAt: future,
+    mediaUrl: "not a url",
+    now: blockersNow,
+  }).some((reason) => reason.includes("https://")),
+  true,
+)
+
+const failed = post({
+  id: "failed",
+  scheduledAt: future,
+  status: "failed",
+  content: "Keep this copy",
+  platforms: ["tiktok"],
+  errorMessage: "Old failure",
+})
+const succeeded = settleRetrySuccess(failed)
+assert.equal(succeeded.status, "scheduled")
+assert.equal(succeeded.errorMessage, undefined)
+assert.equal(succeeded.content, "Keep this copy")
+assert.equal(succeeded.scheduledAt, failed.scheduledAt)
+const rolled = settleRetryFailure(failed, RETRY_ERROR)
+assert.equal(rolled.status, "failed")
+assert.equal(rolled.errorMessage, RETRY_ERROR)
+assert.equal(rolled.content, failed.content)
+assert.equal(rolled.platforms[0], "tiktok")
+assert.equal(claimRetry([], "failed")?.includes("failed"), true)
+assert.equal(claimRetry(["failed"], "failed"), null)
+assert.deepEqual(releaseRetry(["failed", "other"], "failed"), ["other"])
+assert.equal(isCurrentAttempt(2, 1), false)
+assert.equal(isCurrentAttempt(2, 2), true)
 
 console.log("schedule checks passed")

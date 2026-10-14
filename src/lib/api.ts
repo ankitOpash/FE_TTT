@@ -1,6 +1,8 @@
 import {
   PLATFORMS,
+  RETRY_ERROR,
   retryShouldFail,
+  scheduleBlockers,
   shiftSeed,
   type Platform,
   type Post,
@@ -85,13 +87,19 @@ export async function fetchPosts(forceError = false): Promise<Post[]> {
   return posts
 }
 
-export async function createPost(): Promise<void> {
+export async function createPost(post: Post, now = Date.now()): Promise<void> {
   await wait(CREATE_MS)
+  const reasons = scheduleBlockers({
+    content: post.content,
+    platforms: post.platforms,
+    scheduledAt: post.scheduledAt,
+    mediaUrl: post.mediaUrl,
+    now,
+  })
+  if (reasons.length > 0) throw new Error(reasons[0])
 }
 
-export async function retryPost(): Promise<void> {
+export async function retryPost(random = Math.random()): Promise<void> {
   await wait(RETRY_MS)
-  if (retryShouldFail()) {
-    throw new Error("The platform rejected this retry. The post is still failed.")
-  }
+  if (retryShouldFail(random)) throw new Error(RETRY_ERROR)
 }
