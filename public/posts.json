@@ -1,0 +1,244 @@
+[
+  {
+    "id": "p01",
+    "content": "Good morning. The weekend pop-up opens at 10, with the new cold brew and a shorter line if you order ahead in the app.",
+    "platforms": ["facebook"],
+    "scheduledAt": "2026-10-14T08:15:00.000Z",
+    "status": "published"
+  },
+  {
+    "id": "p02",
+    "content": "First pour of the day. The Kenya lot is brighter than last week, and the pastry case is already half gone.",
+    "platforms": ["instagram", "facebook"],
+    "mediaUrl": "https://picsum.photos/id/1060/960/640",
+    "scheduledAt": "2026-10-14T09:40:00.000Z",
+    "status": "published"
+  },
+  {
+    "id": "p03",
+    "content": "Shipping a small fix for the scheduler today: clearer failed states, and a retry that tells you when the platform says no.",
+    "platforms": ["x"],
+    "scheduledAt": "2026-10-14T10:55:00.000Z",
+    "status": "failed",
+    "errorMessage": "X rate limit reached. The post was not published."
+  },
+  {
+    "id": "p04",
+    "content": "Lunch special is back: tomato soup, grilled cheese, and a table by the window if you get here before 12:30.",
+    "platforms": ["x", "facebook"],
+    "scheduledAt": "2026-10-14T12:05:00.000Z",
+    "status": "scheduled"
+  },
+  {
+    "id": "p05",
+    "content": "Studio light, finally. New lookbook frames from yesterday's shoot go up this evening.",
+    "platforms": ["instagram"],
+    "mediaUrl": "https://picsum.photos/id/1015/960/640",
+    "scheduledAt": "2026-10-14T13:25:00.000Z",
+    "status": "scheduled"
+  },
+  {
+    "id": "p06",
+    "content": "Thirty seconds on how we pack orders so the print does not crease. Save this before your next drop.",
+    "platforms": ["tiktok"],
+    "scheduledAt": "2026-10-14T14:45:00.000Z",
+    "status": "scheduled"
+  },
+  {
+    "id": "p07",
+    "content": "One caption, four channels. Today we are opening the waitlist for the November workshop. Details on Facebook, a short version everywhere else.",
+    "platforms": ["facebook", "instagram", "x", "tiktok"],
+    "mediaUrl": "https://picsum.photos/id/106/960/640",
+    "scheduledAt": "2026-10-14T15:50:00.000Z",
+    "status": "scheduled"
+  },
+  {
+    "id": "p08",
+    "content": "Tomorrow's farmers market stall is at the north entrance. We will have the small-batch jars and the last of the peach preserves.",
+    "platforms": ["facebook"],
+    "scheduledAt": "2026-10-15T08:20:00.000Z",
+    "status": "scheduled"
+  },
+  {
+    "id": "p09",
+    "content": "Behind the counter tomorrow: meet Nia, who joined the team this week and already knows the regulars' orders.",
+    "platforms": ["instagram", "tiktok"],
+    "mediaUrl": "https://picsum.photos/id/1027/960/640",
+    "scheduledAt": "2026-10-15T10:10:00.000Z",
+    "status": "scheduled"
+  },
+  {
+    "id": "p10",
+    "content": "Reminder: office hours are online at noon tomorrow. Bring a question about the content calendar, not a slide deck.",
+    "platforms": ["x"],
+    "scheduledAt": "2026-10-15T12:30:00.000Z",
+    "status": "scheduled"
+  },
+  {
+    "id": "p11",
+    "content": "Closing the terrace an hour early tomorrow for a private booking. The indoor room stays open.",
+    "platforms": ["facebook", "instagram"],
+    "scheduledAt": "2026-10-15T15:15:00.000Z",
+    "status": "scheduled"
+  },
+  {
+    "id": "p12",
+    "content": "A quick tour of the new packing table. Three bins, one tape gun, zero lost invoices.",
+    "platforms": ["tiktok"],
+    "mediaUrl": "https://picsum.photos/id/1033/960/640",
+    "scheduledAt": "2026-10-16T09:00:00.000Z",
+    "status": "scheduled"
+  },
+  {
+    "id": "p13",
+    "content": "The reading list for the brand workshop is short on purpose. Two essays, one case study, and a blank calendar.",
+    "platforms": ["x", "instagram"],
+    "scheduledAt": "2026-10-16T14:20:00.000Z",
+    "status": "scheduled"
+  },
+  {
+    "id": "p14",
+    "content": "Community board: we are collecting winter coats by the front door through Sunday. Clean, labeled, and ready to wear.",
+    "platforms": ["facebook"],
+    "scheduledAt": "2026-10-17T11:00:00.000Z",
+    "status": "scheduled"
+  },
+  {
+    "id": "p15",
+    "content": "Trying the new hook again: three mistakes people make when they batch a week of posts in one sitting.",
+    "platforms": ["tiktok"],
+    "scheduledAt": "2026-10-17T15:40:00.000Z",
+    "status": "failed",
+    "errorMessage": "TikTok could not process the video cover. Retry the post."
+  },
+  {
+    "id": "p16",
+    "content": "Color study from the dye studio. Indigo on the left, the failed batch on the right, both staying in the lookbook.",
+    "platforms": ["instagram"],
+    "mediaUrl": "https://picsum.photos/id/145/960/640",
+    "scheduledAt": "2026-10-18T12:15:00.000Z",
+    "status": "scheduled"
+  },
+  {
+    "id": "p17",
+    "content": "We are hiring a part-time photographer for Saturday markets. Portfolio in the reply, please. No agencies.",
+    "platforms": ["x"],
+    "scheduledAt": "2026-10-20T09:45:00.000Z",
+    "status": "scheduled"
+  },
+  {
+    "id": "p18",
+    "content": "Next week we test a shorter class: 45 minutes, one recipe, and you leave with the dough schedule.",
+    "platforms": ["facebook", "tiktok"],
+    "scheduledAt": "2026-10-21T13:30:00.000Z",
+    "status": "scheduled"
+  },
+  {
+    "id": "p19",
+    "content": "Save the date for the winter market launch. Vendors are confirmed, and the first stall photos are in. The full schedule lands Friday.",
+    "platforms": ["facebook", "instagram", "x", "tiktok"],
+    "mediaUrl": "https://picsum.photos/id/160/960/640",
+    "scheduledAt": "2026-10-24T14:00:00.000Z",
+    "status": "scheduled"
+  },
+  {
+    "id": "p20",
+    "content": "Yesterday's window install. The paper flowers stayed up through the rain.",
+    "platforms": ["instagram"],
+    "mediaUrl": "https://picsum.photos/id/292/960/640",
+    "scheduledAt": "2026-10-13T08:30:00.000Z",
+    "status": "published"
+  },
+  {
+    "id": "p21",
+    "content": "Shipped the menu change: two sandwiches out, one grain bowl in, prices unchanged.",
+    "platforms": ["x"],
+    "scheduledAt": "2026-10-13T11:45:00.000Z",
+    "status": "published"
+  },
+  {
+    "id": "p22",
+    "content": "Album from the street fair is up. Tag us if you find yourself in the second row.",
+    "platforms": ["facebook"],
+    "scheduledAt": "2026-10-13T15:10:00.000Z",
+    "status": "failed",
+    "errorMessage": "Facebook rejected the page token. Retry the post."
+  },
+  {
+    "id": "p23",
+    "content": "How the morning playlist gets picked. It is not an algorithm. It is Sam and a speaker that cuts out.",
+    "platforms": ["tiktok"],
+    "scheduledAt": "2026-10-11T09:15:00.000Z",
+    "status": "published"
+  },
+  {
+    "id": "p24",
+    "content": "Carousel draft: five tables from the supper club, with the dishes named in the caption instead of on the slide.",
+    "platforms": ["instagram"],
+    "mediaUrl": "https://picsum.photos/id/225/960/640",
+    "scheduledAt": "2026-10-11T14:50:00.000Z",
+    "status": "failed",
+    "errorMessage": "Instagram returned a media format error for this image."
+  },
+  {
+    "id": "p25",
+    "content": "Thank you for a full room on Thursday. The notes from the pricing talk are now on the blog.",
+    "platforms": ["facebook", "x"],
+    "scheduledAt": "2026-10-09T10:00:00.000Z",
+    "status": "published"
+  },
+  {
+    "id": "p26",
+    "content": "A quiet frame from the archive. Film photo, no filter, just the old counter before the remodel.",
+    "platforms": ["instagram"],
+    "mediaUrl": "https://picsum.photos/id/250/960/640",
+    "scheduledAt": "2026-10-08T13:20:00.000Z",
+    "status": "published"
+  },
+  {
+    "id": "p27",
+    "content": "What we stopped posting, and why the calendar got easier after that.",
+    "platforms": ["x"],
+    "scheduledAt": "2026-10-06T12:40:00.000Z",
+    "status": "failed",
+    "errorMessage": "X rejected the duplicate status. Edit is not part of this demo, so retry the post."
+  },
+  {
+    "id": "p28",
+    "content": "Restock day. If the rosemary loaf is gone by nine, that is normal.",
+    "platforms": ["tiktok", "instagram"],
+    "scheduledAt": "2026-10-12T08:50:00.000Z",
+    "status": "published"
+  },
+  {
+    "id": "p29",
+    "content": "Morning story draft about the espresso machine's nickname. The team voted. The machine did not.",
+    "platforms": ["tiktok"],
+    "scheduledAt": "2026-10-14T08:45:00.000Z",
+    "status": "failed",
+    "errorMessage": "TikTok timed out while uploading. The post is still failed."
+  },
+  {
+    "id": "p30",
+    "content": "Map pin for tomorrow's pop-up. If the photo looks familiar, you have been here before.",
+    "platforms": ["x"],
+    "mediaUrl": "https://picsum.photos/id/318/960/640",
+    "scheduledAt": "2026-10-15T16:00:00.000Z",
+    "status": "scheduled"
+  },
+  {
+    "id": "p31",
+    "content": "Volunteer shift sheet for the coat drive. Two open slots on Saturday afternoon.",
+    "platforms": ["facebook"],
+    "mediaUrl": "https://picsum.photos/id/342/960/640",
+    "scheduledAt": "2026-10-19T11:25:00.000Z",
+    "status": "scheduled"
+  },
+  {
+    "id": "p32",
+    "content": "The November workshop waitlist closes on this day. If you have been meaning to send the form, this is the useful nudge.",
+    "platforms": ["instagram", "facebook", "x"],
+    "scheduledAt": "2026-10-26T15:05:00.000Z",
+    "status": "scheduled"
+  }
+]
