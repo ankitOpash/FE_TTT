@@ -12,18 +12,19 @@ import {
   type Post,
 } from "./schedule"
 
-let queueRevision = 0
+const STORAGE_KEY = "dispatch.posts.v1"
+const REVISION_KEY = "dispatch.posts.rev"
 
 export function queueToken(): number {
-  return queueRevision
+  return Number(localStorage.getItem(REVISION_KEY)) || 0
 }
 
 export function invalidateQueue(): number {
-  queueRevision += 1
-  return queueRevision
+  const next = queueToken() + 1
+  localStorage.setItem(REVISION_KEY, String(next))
+  return next
 }
 
-const STORAGE_KEY = "dispatch.posts.v1"
 const LOAD_MS = 700
 const CREATE_MS = 400
 const RETRY_MS = 1000
@@ -126,7 +127,7 @@ export async function createPost(post: Post, token = queueToken(), now = Date.no
   })
   if (reasons.length > 0) throw new Error(reasons[0])
   const next = applyStoredCreate(readStored(), post)
-  if (!canSaveQueue(token, queueRevision, next) || !next) return null
+  if (!canSaveQueue(token, queueToken(), next) || !next) return null
   savePosts(next)
   return post
 }
@@ -140,7 +141,7 @@ export async function retryPost(
   await wait(RETRY_MS)
   if (retryShouldFail(random)) throw new Error(RETRY_ERROR)
   const next = applyStoredRetry(readStored(), id, now)
-  if (!canSaveQueue(token, queueRevision, next) || !next) return null
+  if (!canSaveQueue(token, queueToken(), next) || !next) return null
   savePosts(next)
   const saved = next.find((item) => item.id === id)
   return saved ?? null
