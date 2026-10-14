@@ -1,5 +1,6 @@
 import { Suspense } from "react";
-import Scheduler, { QueueBoundary } from "@/components/scheduler";
+import Scheduler from "@/components/scheduler";
+import { QueueBoundary } from "@/components/queue-boundary";
 
 export default function Home() {
   return (

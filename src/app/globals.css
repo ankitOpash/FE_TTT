@@ -318,6 +318,7 @@ time {
 .thumb,
 .preview-image {
   width: 100%;
+  height: auto;
   max-height: 220px;
   object-fit: cover;
   border-radius: 12px;
