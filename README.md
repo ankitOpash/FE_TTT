@@ -50,20 +50,35 @@ npm run lint
 - A failed retry restores the original post, including its original error message
 - A second retry claim for the same id is rejected, and a stale attempt token is ignored
 
-`npm run lint` runs ESLint. There is no separate test runner and no backend.
+`npm run test:e2e` builds the app, serves it on port 3100, and runs `e2e/scheduler.spec.ts` with Playwright in the installed Chrome. No browser download is needed, but Chrome must be installed. The tests cover:
+
+- Fast typing in search keeps every character and reaches the URL
+- Platform and status filters stack and survive reload and Back
+- A failed retry restores the original error and shows the toast. A successful retry of a past post marks it published
+- Reset during a retry keeps all 32 posts, including after a reload
+- The composer cannot be closed or escaped while a post is saving
+- Grapheme counters, and the over-limit block
+- A post at 00:30 tomorrow in Pacific/Auckland lands under Tomorrow and is stored in UTC
+- On a 375px screen the collapsed filter button shows how many filters are active
+
+`npm test` runs the checks and then the e2e tests. `npm run lint` runs ESLint. There is no backend.
 
 ## Architecture
 
 | Path | Role |
 | --- | --- |
 | `src/app/page.tsx` | Server page. Suspense wraps the client dashboard. |
-| `src/components/scheduler.tsx` | Queue, filters, composer, and retry UI. |
+| `src/components/scheduler.tsx` | Queue, filters, and retry state. |
+| `src/components/composer.tsx` | New post dialog, validation, and preview. |
+| `src/components/post-card.tsx` | One post in the queue. |
+| `src/components/queue-boundary.tsx` | Error boundary around the dashboard. |
+| `src/components/platform-icon.tsx` | Platform icons. |
 | `src/lib/schedule.ts` | Post type, platform limits, grouping, filtering, timezone conversion, retry outcome. |
 | `src/lib/api.ts` | Mock load, create, and retry. Reads and writes `localStorage`. |
 | `public/posts.json` | 32 seeded posts. |
 | `src/app/globals.css` | Design tokens and layout. |
 
-The dashboard is one client component. Filtering and date grouping stay in pure functions so they can be checked without rendering.
+Filtering and date grouping stay in pure functions so they can be checked without rendering.
 
 ## Mock API
 
@@ -71,9 +86,9 @@ The dashboard is one client component. Filtering and date grouping stay in pure 
 
 On a first visit the client fetches `/posts.json`, shifts the seed dates, and saves the result. After that, `localStorage` key `dispatch.posts.v1` is the source of truth. Reset demo data deletes that key and loads the file again.
 
-`createPost` waits 400ms, then runs the same schedule checks as the form. The first failing reason is thrown and shown on the form. On success the mock API reads the stored queue, prepends the post, and writes it back. It does not write if the queue was reset while it was waiting, or if storage is missing.
+`createPost` waits 400ms, then runs the same schedule checks as the form. The first failing reason is thrown and shown on the form. On success the mock API reads the stored queue, prepends the post, and writes it back. It does not write if the queue was reset while it was waiting, or if storage is missing. In that case the form shows "The queue changed in another tab. Reload to see the latest posts." While a post is saving, Close, Escape, and the backdrop do nothing and the fields are read-only.
 
-`retryPost` takes the post id and waits 1000ms. It fails when `Math.random()` is below 0.2. Tests pass a fixed number instead of `Math.random`. The card changes as soon as Retry is clicked: a future post becomes `scheduled`, and a post whose time is already past becomes `published`. That optimistic row is not written until the mock call succeeds, so a refresh during the wait still shows the failed post. On failure storage is left untouched, the original post is put back on screen, including its original `errorMessage`, and a toast says "The platform rejected this retry. The post is still failed." A reset during the wait bumps a token and the late call does not save. A second click on the same post is ignored while the request is in flight. An older request cannot overwrite a newer one.
+`retryPost` takes the post id and waits 1000ms. It fails when `Math.random()` is below 0.2. Tests pass a fixed number instead of `Math.random`. The card changes as soon as Retry is clicked: a future post becomes `scheduled`, and a post whose time is already past becomes `published`. That optimistic row is not written until the mock call succeeds, so a refresh during the wait still shows the failed post. On failure storage is left untouched, the original post is put back on screen, including its original `errorMessage`, and a toast says "The platform rejected this retry. The post is still failed." A reset during the wait bumps a revision stored in `localStorage` key `dispatch.posts.rev`, so a reset in another tab counts too, and the late call does not save. A second click on the same post is ignored while the request is in flight. An older request cannot overwrite a newer one.
 
 ## UTC and local time
 
