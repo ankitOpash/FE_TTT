@@ -52,7 +52,7 @@ export function sortPlatforms(platforms: Platform[]): Platform[] {
 }
 
 type GraphemeSegmenter = {
-  segment: (input: string) => Iterable<unknown>
+  segment: (input: string) => Iterable<{ segment: string }>
 }
 
 function graphemeSegmenter(): GraphemeSegmenter | null {
@@ -62,10 +62,21 @@ function graphemeSegmenter(): GraphemeSegmenter | null {
   return intl.Segmenter ? new intl.Segmenter(undefined, { granularity: "grapheme" }) : null
 }
 
-export function countGraphemes(content: string): number {
+function graphemeParts(content: string): string[] {
   const segmenter = graphemeSegmenter()
-  if (!segmenter) return [...content].length
-  return [...segmenter.segment(content)].length
+  if (!segmenter) return [...content]
+  return [...segmenter.segment(content)].map((part) => part.segment)
+}
+
+export function countGraphemes(content: string): number {
+  return graphemeParts(content).length
+}
+
+export function clipGraphemes(content: string, limit = 48): string {
+  const text = content.trim()
+  const parts = graphemeParts(text)
+  if (parts.length <= limit) return text
+  return `${parts.slice(0, limit).join("")}…`
 }
 
 export function charactersLeft(content: string, platform: Platform): number {
@@ -293,7 +304,19 @@ export function localInputToUtc(value: string): string {
 }
 
 export function isUtcTimestamp(value: string): boolean {
-  return Number.isFinite(Date.parse(value))
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,3})?Z$/.exec(value)
+  if (!match) return false
+  const time = Date.parse(value)
+  if (!Number.isFinite(time)) return false
+  const date = new Date(time)
+  return (
+    date.getUTCFullYear() === Number(match[1]) &&
+    date.getUTCMonth() + 1 === Number(match[2]) &&
+    date.getUTCDate() === Number(match[3]) &&
+    date.getUTCHours() === Number(match[4]) &&
+    date.getUTCMinutes() === Number(match[5]) &&
+    date.getUTCSeconds() === Number(match[6])
+  )
 }
 
 export function shiftNotice(requested: string, resolved: string): string {

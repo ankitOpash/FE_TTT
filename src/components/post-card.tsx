@@ -2,12 +2,11 @@
 
 import { useState } from "react"
 import { RefreshCw } from "lucide-react"
-import { formatClock, PLATFORM_LABEL, sortPlatforms, type Post } from "@/lib/schedule"
+import { clipGraphemes, formatClock, PLATFORM_LABEL, sortPlatforms, type Post } from "@/lib/schedule"
 import { PlatformIcon } from "./platform-icon"
 
 export function clip(content: string): string {
-  const text = content.trim()
-  return text.length > 48 ? `${text.slice(0, 48)}…` : text
+  return clipGraphemes(content)
 }
 
 export function PostCard({

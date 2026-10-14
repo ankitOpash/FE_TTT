@@ -15,6 +15,10 @@ import {
 const STORAGE_KEY = "dispatch.posts.v1"
 const REVISION_KEY = "dispatch.posts.rev"
 
+export function queueStorageChanged(key: string | null): boolean {
+  return key === STORAGE_KEY || key === REVISION_KEY
+}
+
 export function queueToken(): number {
   return Number(localStorage.getItem(REVISION_KEY)) || 0
 }

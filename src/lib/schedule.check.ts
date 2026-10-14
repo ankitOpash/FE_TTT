@@ -4,6 +4,7 @@ import {
   applyStoredRetry,
   canSaveQueue,
   claimRetry,
+  clipGraphemes,
   clockShiftNotice,
   countGraphemes,
   dayLabel,
@@ -12,6 +13,7 @@ import {
   groupPosts,
   imageUrlError,
   isCurrentAttempt,
+  isUtcTimestamp,
   localInputToUtc,
   mergeQuery,
   platformsOverLimit,
@@ -144,6 +146,15 @@ const shifted = shiftSeed(
   Date.UTC(2026, 9, 16, 8, 0, 0),
 )
 assert.equal(shifted[0].scheduledAt, "2026-10-16T12:00:00.000Z")
+assert.equal(isUtcTimestamp("2026-10-14T12:00:00.000Z"), true)
+assert.equal(isUtcTimestamp("2026-10-14T12:00:00Z"), true)
+assert.equal(isUtcTimestamp("October 14, 2026"), false)
+assert.equal(isUtcTimestamp("2026-10-14"), false)
+assert.equal(isUtcTimestamp("2026-02-31T00:00:00.000Z"), false)
+assert.equal(isUtcTimestamp("2026-10-14T10:00:00+05:30"), false)
+const clipped = clipGraphemes(`${family.repeat(49)} tail`)
+assert.equal(clipped.endsWith("…"), true)
+assert.equal(countGraphemes(clipped.slice(0, -1)), 48)
 
 const visible = filterPosts(
   [

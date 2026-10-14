@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { Plus } from "lucide-react"
-import { clearPosts, createPost, fetchPosts, invalidateQueue, queueToken, retryPost } from "@/lib/api"
+import { clearPosts, createPost, fetchPosts, invalidateQueue, queueStorageChanged, queueToken, retryPost } from "@/lib/api"
 import {
   asPlatform,
   asStatus,
@@ -150,12 +150,16 @@ export default function Scheduler() {
     setPendingIds(claimed)
     const optimistic = settleRetrySuccess(post, Date.now())
     const leaveFailedFilter = status === "failed"
+    const currentAttempt = () => isCurrentAttempt(attempts.current.get(post.id), attempt)
+    const restoreOriginal = () => {
+      setPosts((current) => current?.map((item) => (item.id === post.id ? post : item)) ?? current)
+    }
     setPosts((current) => current?.map((item) => (item.id === post.id ? optimistic : item)) ?? current)
     try {
       const updated = await retryPost(post.id, token)
-      if (queueToken() !== token || !isCurrentAttempt(attempts.current.get(post.id), attempt)) return
-      if (!updated) {
-        setPosts((current) => current?.map((item) => (item.id === post.id ? post : item)) ?? current)
+      if (!currentAttempt()) return
+      if (queueToken() !== token || !updated) {
+        restoreOriginal()
         showToast(STALE_QUEUE, "error", true)
         return
       }
@@ -163,18 +167,21 @@ export default function Scheduler() {
       const outcome = updated.status === "published" ? "marked published" : "back on the queue"
       showToast(`Retry saved. ${clip(post.content)} is ${outcome}.`, "success", leaveFailedFilter)
     } catch (error) {
-      if (queueToken() !== token || !isCurrentAttempt(attempts.current.get(post.id), attempt)) return
+      if (!currentAttempt()) return
+      if (queueToken() !== token) {
+        restoreOriginal()
+        showToast(STALE_QUEUE, "error", true)
+        return
+      }
       const restored = settleRetryFailure(post)
       setPosts((current) => current?.map((item) => (item.id === post.id ? restored : item)) ?? current)
       const message = error instanceof Error ? error.message : "Retry failed."
       showToast(message, "error", true)
     } finally {
-      if (queueToken() !== token) return
-      if (isCurrentAttempt(attempts.current.get(post.id), attempt)) {
-        const released = releaseRetry(pendingRef.current, post.id)
-        pendingRef.current = released
-        setPendingIds(released)
-      }
+      if (!currentAttempt()) return
+      const released = releaseRetry(pendingRef.current, post.id)
+      pendingRef.current = released
+      setPendingIds(released)
     }
   }
 
@@ -190,6 +197,26 @@ export default function Scheduler() {
     setPhase("loading")
     setTick((value) => value + 1)
   }
+
+  useEffect(() => {
+    let timer = 0
+    function onStorage(event: StorageEvent) {
+      if (!queueStorageChanged(event.key)) return
+      window.clearTimeout(timer)
+      timer = window.setTimeout(() => {
+        pendingRef.current = []
+        setPendingIds([])
+        setPosts(null)
+        setPhase("loading")
+        setTick((value) => value + 1)
+      }, 50)
+    }
+    window.addEventListener("storage", onStorage)
+    return () => {
+      window.clearTimeout(timer)
+      window.removeEventListener("storage", onStorage)
+    }
+  }, [])
 
   function onReset() {
     clearPosts()
