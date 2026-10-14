@@ -229,12 +229,25 @@ export function groupPosts(posts: Post[], now = new Date()): DayGroup[] {
 
 export function filterPosts(posts: Post[], filters: Filters): Post[] {
   const needle = filters.q.trim().toLowerCase()
-  return posts.filter((post) => {
-    if (filters.platform && !post.platforms.includes(filters.platform)) return false
-    if (filters.status && post.status !== filters.status) return false
-    if (needle && !post.content.toLowerCase().includes(needle)) return false
-    return true
-  })
+  return posts.filter((post) => matchesFilters(post, filters, needle))
+}
+
+function matchesFilters(post: Post, filters: Filters, needle = filters.q.trim().toLowerCase()): boolean {
+  if (filters.platform && !post.platforms.includes(filters.platform)) return false
+  if (filters.status && post.status !== filters.status) return false
+  if (needle && !post.content.toLowerCase().includes(needle)) return false
+  return true
+}
+
+export function visiblePosts(posts: Post[], filters: Filters, pendingIds: readonly string[] = []): Post[] {
+  const pending = new Set(pendingIds)
+  const matched = filterPosts(posts, filters)
+  if (pending.size === 0) return matched
+  const seen = new Set(matched.map((post) => post.id))
+  const held = posts.filter(
+    (post) => pending.has(post.id) && !seen.has(post.id) && matchesFilters(post, { ...filters, status: "" }),
+  )
+  return [...matched, ...held]
 }
 
 function utcDayStart(ms: number): number {

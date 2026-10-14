@@ -11,7 +11,6 @@ import {
   claimRetry,
   clockShiftNotice,
   countGraphemes,
-  filterPosts,
   formatClock,
   groupPosts,
   imageUrlError,
@@ -29,9 +28,16 @@ import {
   sortPlatforms,
   STATUSES,
   toLocalInputValue,
+  visiblePosts,
   type Platform,
   type Post,
 } from "@/lib/schedule"
+
+type Notice = {
+  id: number
+  text: string
+  tone: "success" | "error"
+}
 
 function clip(content: string): string {
   const text = content.trim()
@@ -53,10 +59,13 @@ export default function Scheduler() {
   const [composerOpen, setComposerOpen] = useState(false)
   const closeComposer = useCallback(() => setComposerOpen(false), [])
   const [filtersOpen, setFiltersOpen] = useState(false)
-  const [toast, setToast] = useState("")
+  const [toast, setToast] = useState<Notice | null>(null)
   const [pendingIds, setPendingIds] = useState<string[]>([])
   const pendingRef = useRef<string[]>([])
   const attempts = useRef(new Map<string, number>())
+  const loadEpoch = useRef(0)
+  const toastSeq = useRef(0)
+  const toastFocus = useRef(false)
   const postsRef = useRef<Post[] | null>(null)
   const originals = useRef(new Map<string, Post>())
   const toastRef = useRef<HTMLDivElement>(null)
@@ -100,17 +109,34 @@ export default function Scheduler() {
     return () => window.removeEventListener("popstate", onPop)
   }, [])
 
-  function showToast(message: string, moveFocus: boolean) {
-    setToast(message)
-    if (moveFocus) queueMicrotask(() => toastRef.current?.focus())
+  function showToast(text: string, tone: Notice["tone"], moveFocus: boolean) {
+    toastSeq.current += 1
+    toastFocus.current = moveFocus
+    setToast({ id: toastSeq.current, text, tone })
   }
 
+  useEffect(() => {
+    if (!toast) return
+    if (toastFocus.current) toastRef.current?.focus()
+    if (toast.tone !== "success") return
+    const id = toast.id
+    const timer = window.setTimeout(() => {
+      setToast((current) => (current?.id === id ? null : current))
+    }, 5000)
+    return () => window.clearTimeout(timer)
+  }, [toast])
+
   function setQueue(next: Post[], persist: boolean) {
+    if (postsRef.current == null) return
     postsRef.current = next
     setPosts(next)
     if (!persist) return
-    const stored = next.map((item) => originals.current.get(item.id) ?? item)
-    savePosts(stored)
+    savePosts(next.map((item) => originals.current.get(item.id) ?? item))
+  }
+
+  function queueReady(epoch: number): Post[] | null {
+    if (epoch !== loadEpoch.current) return null
+    return postsRef.current
   }
 
   useEffect(() => {
@@ -136,15 +162,19 @@ export default function Scheduler() {
   }, [forceError, tick])
 
   async function onCreate(post: Post) {
+    const epoch = loadEpoch.current
     await createPost(post)
-    setQueue([post, ...(postsRef.current ?? [])], true)
+    const current = queueReady(epoch)
+    if (!current) return
+    setQueue([post, ...current], true)
     setComposerOpen(false)
-    showToast("Scheduled. The post is on the queue.", false)
+    showToast("Scheduled. The post is on the queue.", "success", false)
   }
 
   async function onRetry(post: Post) {
     const claimed = claimRetry(pendingRef.current, post.id)
     if (!claimed) return
+    const epoch = loadEpoch.current
     pendingRef.current = claimed
     const attempt = (attempts.current.get(post.id) ?? 0) + 1
     attempts.current.set(post.id, attempt)
@@ -152,31 +182,40 @@ export default function Scheduler() {
     originals.current.set(post.id, post)
     const optimistic = settleRetrySuccess(post, Date.now())
     const leaveFailedFilter = status === "failed"
+    const starting = queueReady(epoch)
+    if (!starting) {
+      pendingRef.current = releaseRetry(pendingRef.current, post.id)
+      setPendingIds(pendingRef.current)
+      return
+    }
     setQueue(
-      (postsRef.current ?? []).map((item) => (item.id === post.id ? optimistic : item)),
+      starting.map((item) => (item.id === post.id ? optimistic : item)),
       false,
     )
     try {
       await retryPost()
-      if (!isCurrentAttempt(attempts.current.get(post.id), attempt)) return
+      const current = queueReady(epoch)
+      if (!current || !isCurrentAttempt(attempts.current.get(post.id), attempt)) return
       originals.current.delete(post.id)
       setQueue(
-        (postsRef.current ?? []).map((item) => (item.id === post.id ? optimistic : item)),
+        current.map((item) => (item.id === post.id ? optimistic : item)),
         true,
       )
       const outcome = optimistic.status === "published" ? "marked published" : "back on the queue"
-      showToast(`Retry saved. ${clip(post.content)} is ${outcome}.`, leaveFailedFilter)
+      showToast(`Retry saved. ${clip(post.content)} is ${outcome}.`, "success", leaveFailedFilter)
     } catch (error) {
-      if (!isCurrentAttempt(attempts.current.get(post.id), attempt)) return
+      const current = queueReady(epoch)
+      if (!current || !isCurrentAttempt(attempts.current.get(post.id), attempt)) return
       const restored = settleRetryFailure(post)
       setQueue(
-        (postsRef.current ?? []).map((item) => (item.id === post.id ? restored : item)),
+        current.map((item) => (item.id === post.id ? restored : item)),
         true,
       )
       originals.current.delete(post.id)
       const message = error instanceof Error ? error.message : "Retry failed."
-      showToast(message, true)
+      showToast(message, "error", true)
     } finally {
+      if (epoch !== loadEpoch.current) return
       if (isCurrentAttempt(attempts.current.get(post.id), attempt)) {
         const released = releaseRetry(pendingRef.current, post.id)
         pendingRef.current = released
@@ -185,19 +224,26 @@ export default function Scheduler() {
     }
   }
 
-  function reload() {
-    setPhase("loading")
+  function abandonQueue() {
+    loadEpoch.current += 1
+    pendingRef.current = []
+    setPendingIds([])
+    originals.current.clear()
     postsRef.current = null
     setPosts(null)
+  }
+
+  function reload() {
+    abandonQueue()
+    setPhase("loading")
     setTick((value) => value + 1)
   }
 
   function onReset() {
     clearPosts()
     if (forceError) {
+      abandonQueue()
       setPhase("loading")
-      postsRef.current = null
-      setPosts(null)
       writeParams({ forceError: "" })
     } else reload()
   }
@@ -208,7 +254,7 @@ export default function Scheduler() {
     writeParams({ platform: "", status: "", q: "" }, "push")
   }
 
-  const visible = posts ? filterPosts(posts, { platform, status, q: draft }) : []
+  const visible = posts ? visiblePosts(posts, { platform, status, q: draft }, pendingIds) : []
   const groups = groupPosts(visible)
   const filtersActive = Boolean(platform || status || draft)
 
@@ -324,9 +370,8 @@ export default function Scheduler() {
                 className="primary"
                 onClick={() => {
                   if (forceError) {
+                    abandonQueue()
                     setPhase("loading")
-                    postsRef.current = null
-                    setPosts(null)
                     writeParams({ forceError: "" })
                   } else reload()
                 }}
@@ -385,9 +430,9 @@ export default function Scheduler() {
         <Composer onClose={closeComposer} onCreate={onCreate} />
       ) : null}
       {toast ? (
-        <div className="toast" role="alert" tabIndex={-1} ref={toastRef}>
-          <p>{toast}</p>
-          <button type="button" className="toast-dismiss" onClick={() => setToast("")}>
+        <div key={toast.id} className="toast" role="alert" tabIndex={-1} ref={toastRef}>
+          <p>{toast.text}</p>
+          <button type="button" className="toast-dismiss" onClick={() => setToast(null)}>
             Dismiss
           </button>
         </div>
@@ -502,11 +547,14 @@ function Composer({
   }, [content, mediaUrl, openedAt, when])
 
   useEffect(() => {
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
     fieldRef.current?.focus()
+    return () => {
+      previousFocus?.focus()
+    }
   }, [])
 
   useEffect(() => {
-    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
     const previous = document.body.style.overflow
     document.body.style.overflow = "hidden"
     function onKey(event: KeyboardEvent) {
@@ -536,7 +584,6 @@ function Composer({
     return () => {
       document.body.style.overflow = previous
       window.removeEventListener("keydown", onKey)
-      previousFocus?.focus()
     }
   }, [requestClose])
 

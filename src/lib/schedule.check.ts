@@ -5,6 +5,7 @@ import {
   countGraphemes,
   dayLabel,
   filterPosts,
+  visiblePosts,
   groupPosts,
   imageUrlError,
   isCurrentAttempt,
@@ -149,6 +150,16 @@ const visible = filterPosts(
   { platform: "x", status: "failed", q: "launch" },
 )
 assert.deepEqual(visible.map((item) => item.id), ["a"])
+const held = visiblePosts(
+  [
+    post({ id: "stay", scheduledAt: future, status: "failed", errorMessage: "Failed" }),
+    post({ id: "pending", scheduledAt: future, status: "scheduled", content: "Still on screen" }),
+    post({ id: "other", scheduledAt: future, status: "scheduled", content: "Hidden" }),
+  ],
+  { platform: "", status: "failed", q: "" },
+  ["pending"],
+)
+assert.deepEqual(held.map((item) => item.id), ["stay", "pending"])
 assert.deepEqual(
   filterPosts(
     [post({ id: "mix", scheduledAt: future, status: "scheduled", content: "Launch notes", platforms: ["x"] })],

@@ -2,7 +2,7 @@
 
 Frontend-only scheduler for Facebook, Instagram, X, and TikTok. Compose a post, place it on a dated queue, and retry anything that failed. The app never calls a social network, never authenticates, and never publishes.
 
-There is no live URL yet. Deploy only after that step is approved, then replace this sentence with the deployed address.
+Live demo: [https://fetest-alpha.vercel.app](https://fetest-alpha.vercel.app)
 
 ## Installation
 
@@ -109,4 +109,4 @@ npx vercel
 
 Netlify: connect the repository, set the build command to `npm run build`, and publish the Next.js output with the official Next.js runtime.
 
-Add the live URL to the top of this file only after that deploy succeeds.
+The live demo is [https://fetest-alpha.vercel.app](https://fetest-alpha.vercel.app).
