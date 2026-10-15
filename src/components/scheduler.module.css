@@ -1,0 +1,113 @@
+.shell {
+  width: min(960px, 100%);
+  margin: 0 auto;
+  padding: 0 var(--space-2) 96px;
+}
+
+.zone,
+.quiet {
+  margin: var(--space-1) 0 0;
+  color: var(--muted);
+  font-size: var(--meta);
+}
+
+.quiet {
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.state {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-1);
+  padding: var(--space-3) 0;
+}
+
+.state h2,
+.state p {
+  margin: 0;
+}
+
+.state p {
+  color: var(--muted);
+}
+
+.primary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--accent-ink);
+  cursor: pointer;
+}
+
+.mark {
+  width: 72px;
+  height: 72px;
+  color: var(--muted);
+}
+
+.fab {
+  display: none;
+}
+
+.toast {
+  position: fixed;
+  right: var(--space-2);
+  bottom: var(--space-2);
+  z-index: var(--z-toast);
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  max-width: min(420px, calc(100% - 32px));
+  padding: var(--space-2);
+  border-radius: var(--radius);
+  background: var(--ink);
+  color: var(--bg);
+  box-shadow: var(--shadow-lift);
+}
+
+.toast button {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+@media (max-width: 767px) {
+  .toast {
+    bottom: 76px;
+  }
+}
+
+@media (max-width: 767px) {
+  .fab {
+    position: fixed;
+    right: var(--space-2);
+    bottom: var(--space-2);
+    z-index: var(--z-fab);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    min-height: 44px;
+    padding: 0 16px;
+    border: 0;
+    border-radius: 999px;
+    background: var(--accent);
+    color: var(--accent-ink);
+    cursor: pointer;
+  }
+
+  .fab:disabled {
+    opacity: 0.6;
+  }
+}

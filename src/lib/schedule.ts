@@ -34,13 +34,27 @@ export const SEED_ANCHOR_UTC = Date.UTC(2026, 9, 14)
 export const RETRY_FAIL_RATE = 0.2
 
 export type Filters = {
-  platform: Platform | ""
+  platforms: Platform[]
   status: Status | ""
   q: string
 }
 
 export function asPlatform(value: string | null): Platform | "" {
   return PLATFORMS.find((platform) => platform === value) ?? ""
+}
+
+export function parsePlatforms(value: string | null): Platform[] {
+  if (!value) return []
+  const found: Platform[] = []
+  for (const part of value.split(",")) {
+    const platform = asPlatform(part.trim().toLowerCase())
+    if (platform && !found.includes(platform)) found.push(platform)
+  }
+  return sortPlatforms(found)
+}
+
+export function formatPlatformParam(platforms: readonly Platform[]): string {
+  return sortPlatforms([...platforms]).join(",")
 }
 
 export function asStatus(value: string | null): Status | "" {
@@ -244,10 +258,117 @@ export function filterPosts(posts: Post[], filters: Filters): Post[] {
 }
 
 function matchesFilters(post: Post, filters: Filters, needle = filters.q.trim().toLowerCase()): boolean {
-  if (filters.platform && !post.platforms.includes(filters.platform)) return false
+  if (filters.platforms.length > 0 && !filters.platforms.some((platform) => post.platforms.includes(platform))) {
+    return false
+  }
   if (filters.status && post.status !== filters.status) return false
   if (needle && !post.content.toLowerCase().includes(needle)) return false
   return true
+}
+
+function yesterdayStart(now: Date): number {
+  const yesterday = new Date(localDayStart(now))
+  yesterday.setDate(yesterday.getDate() - 1)
+  return yesterday.getTime()
+}
+
+export function isEarlierGroup(group: DayGroup, now = new Date()): boolean {
+  const first = group.posts[0]
+  if (!first) return false
+  return localDayStart(new Date(first.scheduledAt)) < yesterdayStart(now)
+}
+
+export function failedCount(posts: readonly Post[]): number {
+  return posts.filter((post) => post.status === "failed").length
+}
+
+export function earlierSummary(groups: readonly DayGroup[]): { posts: number; failed: number } {
+  return {
+    posts: groups.reduce((sum, group) => sum + group.posts.length, 0),
+    failed: groups.reduce((sum, group) => sum + failedCount(group.posts), 0),
+  }
+}
+
+export function earlierShouldOpen(filters: Pick<Filters, "status" | "q">): boolean {
+  return filters.status === "failed" || filters.q.trim().length > 0
+}
+
+export function schedulePreset(kind: "hour" | "tomorrow" | "monday", now = new Date()): string {
+  if (kind === "hour") return toLocalInputValue(new Date(now.getTime() + 60 * 60 * 1000))
+  const date = new Date(now)
+  date.setHours(9, 0, 0, 0)
+  if (kind === "tomorrow") {
+    date.setDate(date.getDate() + 1)
+    return toLocalInputValue(date)
+  }
+  const delta = (8 - date.getDay()) % 7 || 7
+  date.setDate(date.getDate() + delta)
+  return toLocalInputValue(date)
+}
+
+export function formatRelative(iso: string, now = new Date()): string {
+  const time = new Date(iso).getTime()
+  if (!Number.isFinite(time)) return ""
+  const delta = time - now.getTime()
+  const abs = Math.abs(delta)
+  const minute = 60_000
+  const hour = 60 * minute
+  const label = dayLabel(iso, now)
+  const clock = formatClock(iso)
+  if (label === "Tomorrow" || label === "Yesterday") return `${label} ${clock}`
+  if (label !== "Today") return clock
+  if (abs < minute) return delta >= 0 ? "in 1m" : "just now"
+  if (abs < hour) {
+    const minutes = Math.max(1, Math.round(abs / minute))
+    return delta >= 0 ? `in ${minutes}m` : `${minutes}m ago`
+  }
+  const hours = Math.max(1, Math.round(abs / hour))
+  return delta >= 0 ? `in ${hours}h` : `${hours}h ago`
+}
+
+export function formatExactTimes(iso: string): string {
+  const date = new Date(iso)
+  if (!Number.isFinite(date.getTime())) return ""
+  const local = new Intl.DateTimeFormat(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  }).format(date)
+  const utc = new Intl.DateTimeFormat("en-US", {
+    timeZone: "UTC",
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  }).format(date)
+  return `${local} · ${utc}`
+}
+
+export function formatScheduleSummary(iso: string, now = new Date()): string {
+  const date = new Date(iso)
+  if (!Number.isFinite(date.getTime())) return ""
+  const local = new Intl.DateTimeFormat(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date)
+  const utc = new Intl.DateTimeFormat("en-US", {
+    timeZone: "UTC",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date)
+  const zone =
+    new Intl.DateTimeFormat("en-US", { timeZoneName: "short" })
+      .formatToParts(now)
+      .find((part) => part.type === "timeZoneName")?.value ?? localZoneLabel(now)
+  return `${local} ${zone} (${utc} UTC)`
 }
 
 export function canSaveQueue(startedAt: number, currentToken: number, posts: Post[] | null): boolean {

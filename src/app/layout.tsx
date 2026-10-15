@@ -19,8 +19,16 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${sans.variable} ${display.variable}`}>
-      <body>{children}</body>
+    <html lang="en" className={`${sans.variable} ${display.variable}`} suppressHydrationWarning>
+      <body suppressHydrationWarning>
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              'try{var t=localStorage.getItem("dispatch.theme");var root=document.documentElement;if(t==="dark"||t==="light")root.dataset.theme=t;else if(window.matchMedia("(prefers-color-scheme: dark)").matches)root.dataset.theme="dark"}catch(e){}',
+          }}
+        />
+        {children}
+      </body>
     </html>
   );
 }

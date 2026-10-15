@@ -1,0 +1,27 @@
+.state {
+  display: grid;
+  justify-items: start;
+  gap: var(--gap);
+  width: min(960px, 100%);
+  margin: 0 auto;
+  padding: var(--space-3) var(--space-2);
+}
+
+.state h2,
+.state p {
+  margin: 0;
+}
+
+.state p {
+  color: var(--muted);
+}
+
+.primary {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--accent-ink);
+  cursor: pointer;
+}

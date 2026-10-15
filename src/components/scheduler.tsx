@@ -5,24 +5,32 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { Plus } from "lucide-react"
 import { clearPosts, createPost, fetchPosts, invalidateQueue, queueStorageChanged, queueToken, retryPost } from "@/lib/api"
 import {
-  asPlatform,
   asStatus,
   claimRetry,
+  formatPlatformParam,
   groupPosts,
   isCurrentAttempt,
   localZoneLabel,
   mergeQuery,
-  PLATFORM_LABEL,
-  PLATFORMS,
+  parsePlatforms,
   releaseRetry,
   settleRetryFailure,
   settleRetrySuccess,
-  STATUSES,
   visiblePosts,
+  type Platform,
   type Post,
+  type Status,
 } from "@/lib/schedule"
+import { useNow } from "./clock"
+import { CommandPalette } from "./command-palette"
 import { Composer } from "./composer"
-import { clip, PostCard } from "./post-card"
+import { FilterBar } from "./filter-bar"
+import { clip } from "./post-card"
+import { QueueList, QueueSkeleton } from "./queue-list"
+import { StatsStrip } from "./stats-strip"
+import { toggleTheme } from "./theme"
+import { TopBar } from "./top-bar"
+import styles from "./scheduler.module.css"
 
 type Notice = {
   id: number
@@ -36,8 +44,9 @@ export default function Scheduler() {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
+  const now = useNow()
   const forceError = searchParams.get("forceError") === "1"
-  const platform = asPlatform(searchParams.get("platform"))
+  const platforms = parsePlatforms(searchParams.get("platform"))
   const status = asStatus(searchParams.get("status"))
   const query = searchParams.get("q") ?? ""
   const [posts, setPosts] = useState<Post[] | null>(null)
@@ -45,10 +54,13 @@ export default function Scheduler() {
   const [loadError, setLoadError] = useState("")
   const [tick, setTick] = useState(0)
   const [composerOpen, setComposerOpen] = useState(false)
-  const closeComposer = useCallback(() => setComposerOpen(false), [])
+  const closeComposer = useCallback(() => setComposerOpen(false), [setComposerOpen])
   const [filtersOpen, setFiltersOpen] = useState(false)
+  const [paletteOpen, setPaletteOpen] = useState(false)
   const [toast, setToast] = useState<Notice | null>(null)
   const [pendingIds, setPendingIds] = useState<string[]>([])
+  const [freshIds, setFreshIds] = useState<string[]>([])
+  const [shakeIds, setShakeIds] = useState<string[]>([])
   const pendingRef = useRef<string[]>([])
   const attempts = useRef(new Map<string, number>())
   const toastSeq = useRef(0)
@@ -57,6 +69,7 @@ export default function Scheduler() {
   const paramsRef = useRef(searchParams.toString())
   const sentQuery = useRef(query)
   const searchTimer = useRef<number | null>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
   const [draft, setDraft] = useState(query)
 
   const writeParams = useCallback(
@@ -75,7 +88,8 @@ export default function Scheduler() {
     const rawPlatform = searchParams.get("platform")
     const rawStatus = searchParams.get("status")
     const updates: Record<string, string> = {}
-    if (rawPlatform && !asPlatform(rawPlatform)) updates.platform = ""
+    const canonical = formatPlatformParam(parsePlatforms(rawPlatform))
+    if ((rawPlatform ?? "") !== canonical) updates.platform = canonical
     if (rawStatus && !asStatus(rawStatus)) updates.status = ""
     if (Object.keys(updates).length > 0) writeParams(updates)
   }, [searchParams, writeParams])
@@ -131,6 +145,40 @@ export default function Scheduler() {
     }
   }, [forceError, tick])
 
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      const meta = event.metaKey || event.ctrlKey
+      if (meta && event.key.toLowerCase() === "k") {
+        if (composerOpen) return
+        event.preventDefault()
+        setPaletteOpen((open) => !open)
+        return
+      }
+      const target = event.target
+      const typing =
+        target instanceof HTMLElement && Boolean(target.closest("input, textarea, select, [contenteditable='true']"))
+      if (typing || composerOpen || paletteOpen) return
+      if (event.key === "/") {
+        event.preventDefault()
+        searchRef.current?.focus()
+        return
+      }
+      if ((event.key === "n" || event.key === "N") && !meta && !event.altKey && phase === "ready") {
+        event.preventDefault()
+        setComposerOpen(true)
+      }
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [composerOpen, paletteOpen, phase])
+
+  function flash(id: string, setList: (value: string[] | ((current: string[]) => string[])) => void) {
+    setList((current) => (current.includes(id) ? current : [...current, id]))
+    window.setTimeout(() => {
+      setList((current) => current.filter((item) => item !== id))
+    }, 700)
+  }
+
   async function onCreate(post: Post) {
     const token = queueToken()
     const saved = await createPost(post, token)
@@ -155,6 +203,7 @@ export default function Scheduler() {
       setPosts((current) => current?.map((item) => (item.id === post.id ? post : item)) ?? current)
     }
     setPosts((current) => current?.map((item) => (item.id === post.id ? optimistic : item)) ?? current)
+    flash(post.id, setFreshIds)
     try {
       const updated = await retryPost(post.id, token)
       if (!currentAttempt()) return
@@ -175,6 +224,7 @@ export default function Scheduler() {
       }
       const restored = settleRetryFailure(post)
       setPosts((current) => current?.map((item) => (item.id === post.id ? restored : item)) ?? current)
+      flash(post.id, setShakeIds)
       const message = error instanceof Error ? error.message : "Retry failed."
       showToast(message, "error", true)
     } finally {
@@ -233,187 +283,168 @@ export default function Scheduler() {
     writeParams({ platform: "", status: "", q: "" }, "push")
   }
 
-  const visible = posts ? visiblePosts(posts, { platform, status, q: draft }, pendingIds) : []
-  const groups = groupPosts(visible)
-  const activeCount = [platform, status, draft.trim()].filter(Boolean).length
-  const filtersActive = activeCount > 0
+  function togglePlatform(platform: Platform) {
+    const next = platforms.includes(platform)
+      ? platforms.filter((item) => item !== platform)
+      : [...platforms, platform]
+    writeParams({ platform: formatPlatformParam(next) }, "push")
+  }
+
+  function selectStatus(next: Status | "") {
+    if (next === status) return
+    writeParams({ status: next }, "push")
+  }
+
+  function retryAll() {
+    if (!posts) return
+    for (const post of posts) {
+      if (post.status === "failed") void onRetry(post)
+    }
+  }
+
+  const visible = posts ? visiblePosts(posts, { platforms, status, q: draft }, pendingIds) : []
+  const groups = posts ? groupPosts(visible, now > 0 ? new Date(now) : new Date()) : []
+  const filtersActive = platforms.length > 0 || Boolean(status) || Boolean(draft.trim())
+  const counts = {
+    all: posts?.length ?? 0,
+    scheduled: posts?.filter((post) => post.status === "scheduled").length ?? 0,
+    published: posts?.filter((post) => post.status === "published").length ?? 0,
+    failed: posts?.filter((post) => post.status === "failed").length ?? 0,
+  }
 
   return (
-    <div className="app">
-      <header className="nav">
-        <div className="brand">
-          <p className="kicker">Social queue</p>
-          <h1>Dispatch</h1>
-        </div>
-        <button type="button" className="primary" onClick={() => setComposerOpen(true)} disabled={phase !== "ready"}>
-          <Plus size={16} aria-hidden="true" />
-          New post
-        </button>
-      </header>
+    <div className={styles.shell}>
+      <TopBar
+        query={draft}
+        inputRef={searchRef}
+        ready={phase === "ready"}
+        onQuery={(value) => {
+          setDraft(value)
+          if (searchTimer.current) window.clearTimeout(searchTimer.current)
+          searchTimer.current = window.setTimeout(() => writeParams({ q: value }), 200)
+        }}
+        onQueryBlur={(value) => {
+          if (searchTimer.current) window.clearTimeout(searchTimer.current)
+          writeParams({ q: value })
+        }}
+        onNew={() => setComposerOpen(true)}
+        onTheme={toggleTheme}
+        onPalette={() => setPaletteOpen(true)}
+      />
 
-      <div className="layout">
-        <aside className="panel">
-          <button
-            type="button"
-            className="filters-toggle"
-            aria-expanded={filtersOpen}
-            onClick={() => setFiltersOpen((open) => !open)}
-          >
-            {filtersOpen ? "Hide filters" : "Show filters"}
-            {activeCount > 0 ? ` (${activeCount} active)` : ""}
-          </button>
-          <div className={filtersOpen ? "filters-body" : "filters-body is-collapsed"}>
-          <form
-            className="filters"
-            onSubmit={(event) => event.preventDefault()}
-            role="search"
-          >
-            <label>
-              Search
-              <input
-                value={draft}
-                onChange={(event) => {
-                  const value = event.target.value
-                  setDraft(value)
-                  if (searchTimer.current) window.clearTimeout(searchTimer.current)
-                  searchTimer.current = window.setTimeout(() => writeParams({ q: value }), 200)
-                }}
-                onBlur={(event) => {
-                  if (searchTimer.current) window.clearTimeout(searchTimer.current)
-                  writeParams({ q: event.target.value })
-                }}
-                placeholder="Search post text"
-                type="search"
-              />
-            </label>
-            <label>
-              Platform
-              <select
-                value={platform}
-                onChange={(event) => writeParams({ platform: event.target.value }, "push")}
-              >
-                <option value="">All platforms</option>
-                {PLATFORMS.map((item) => (
-                  <option key={item} value={item}>
-                    {PLATFORM_LABEL[item]}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Status
-              <select value={status} onChange={(event) => writeParams({ status: event.target.value }, "push")}>
-                <option value="">All statuses</option>
-                {STATUSES.map((item) => (
-                  <option key={item} value={item}>
-                    {item[0].toUpperCase() + item.slice(1)}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </form>
-          </div>
-          <p className="count">
-            {phase === "ready"
-              ? `${visible.length} of ${posts?.length ?? 0} posts`
-              : phase === "error"
-                ? "The queue did not load"
-                : "Loading the queue"}
-          </p>
-          <p className="zone">
-            {phase === "ready"
-              ? `Times shown in ${localZoneLabel()}.`
-              : "Times are stored in UTC and shown in your timezone."}
-          </p>
-          {filtersActive ? (
+      {phase === "ready" ? (
+        <>
+          <StatsStrip
+            counts={counts}
+            status={status}
+            retrying={pendingIds.length > 0}
+            onStatus={(next) => selectStatus(next)}
+            onRetryAll={retryAll}
+          />
+          <FilterBar
+            platforms={platforms}
+            status={status}
+            query={draft}
+            counts={counts}
+            showing={visible.length}
+            total={posts?.length ?? 0}
+            open={filtersOpen}
+            onOpenChange={setFiltersOpen}
+            onTogglePlatform={togglePlatform}
+            onClearPlatforms={() => {
+              if (platforms.length === 0) return
+              writeParams({ platform: "" }, "push")
+            }}
+            onStatus={selectStatus}
+            onClear={clearFilters}
+            onClearQuery={() => {
+              if (searchTimer.current) window.clearTimeout(searchTimer.current)
+              setDraft("")
+              writeParams({ q: "" })
+            }}
+          />
+          <p className={styles.zone}>Times shown in {localZoneLabel()}.</p>
+        </>
+      ) : null}
+
+      <main aria-busy={phase === "loading"}>
+        {phase === "loading" ? <QueueSkeleton /> : null}
+        {phase === "error" ? (
+          <div className={styles.state}>
+            <h2>The queue did not load</h2>
+            <p>{loadError}</p>
             <button
               type="button"
-              className="text-button"
-              onClick={clearFilters}
+              className={styles.primary}
+              onClick={() => {
+                if (forceError) {
+                  abandonQueue()
+                  setPhase("loading")
+                  writeParams({ forceError: "" })
+                } else reload()
+              }}
             >
-              Clear filters
+              Try again
             </button>
-          ) : null}
-          <button type="button" className="text-button" onClick={onReset} disabled={phase === "loading"}>
-            Reset demo data
-          </button>
-        </aside>
-
-        <main className="queue" aria-busy={phase === "loading"}>
-          <p className="lede">Compose once, pick the channels, and keep the week in one list.</p>
-          {phase === "loading" ? <Loading /> : null}
-          {phase === "error" ? (
-            <div className="state">
-              <h2>The queue did not load</h2>
-              <p>{loadError}</p>
-              <button
-                type="button"
-                className="primary"
-                onClick={() => {
-                  if (forceError) {
-                    abandonQueue()
-                    setPhase("loading")
-                    writeParams({ forceError: "" })
-                  } else reload()
-                }}
-              >
-                Try again
+          </div>
+        ) : null}
+        {phase === "ready" && visible.length === 0 ? (
+          <div className={styles.state}>
+            <EmptyMark />
+            <h2>{posts && posts.length > 0 ? "No posts match" : "No posts yet"}</h2>
+            <p>
+              {posts && posts.length > 0
+                ? "Nothing in the queue matches these filters."
+                : "Schedule a post and it will land on the day you picked."}
+            </p>
+            {filtersActive ? (
+              <button type="button" className={styles.primary} onClick={clearFilters}>
+                Clear filters
               </button>
-            </div>
-          ) : null}
-          {phase === "ready" && visible.length === 0 ? (
-            <div className="state">
-              <h2>{posts && posts.length > 0 ? "Nothing matches" : "No posts yet"}</h2>
-              <p>
-                {posts && posts.length > 0
-                  ? "Try another platform, status, or search."
-                  : "Schedule a post and it will land on the day you picked."}
-              </p>
-              {filtersActive ? (
-                <button
-                  type="button"
-                  className="primary"
-                  onClick={clearFilters}
-                >
-                  Clear filters
-                </button>
-              ) : (
-                <button type="button" className="primary" onClick={() => setComposerOpen(true)}>
-                  New post
-                </button>
-              )}
-            </div>
-          ) : null}
-          {phase === "ready"
-            ? groups.map((group) => (
-                <section key={group.label} className="day">
-                  <h2>
-                    {group.label}
-                    <span>{group.posts.length}</span>
-                  </h2>
-                  <div className="cards">
-                    {group.posts.map((post) => (
-                      <PostCard
-                        key={post.id}
-                        post={post}
-                        retrying={pendingIds.includes(post.id)}
-                        onRetry={onRetry}
-                      />
-                    ))}
-                  </div>
-                </section>
-              ))
-            : null}
-        </main>
-      </div>
+            ) : (
+              <button type="button" className={styles.primary} onClick={() => setComposerOpen(true)}>
+                New post
+              </button>
+            )}
+          </div>
+        ) : null}
+        {phase === "ready" && visible.length > 0 ? (
+          <QueueList
+            groups={groups}
+            now={now}
+            forceEarlier={filtersActive}
+            pendingIds={pendingIds}
+            freshIds={freshIds}
+            shakeIds={shakeIds}
+            onRetry={onRetry}
+            onDemo={() => showToast("This demo does not save that action.", "success", false)}
+          />
+        ) : null}
+      </main>
 
-      {composerOpen ? (
-        <Composer onClose={closeComposer} onCreate={onCreate} />
-      ) : null}
+      <button type="button" className={styles.quiet} onClick={onReset} disabled={phase === "loading"}>
+        Reset demo data
+      </button>
+
+      <button type="button" className={styles.fab} onClick={() => setComposerOpen(true)} disabled={phase !== "ready"}>
+        <Plus size={16} aria-hidden="true" />
+        New post
+      </button>
+
+      {composerOpen ? <Composer onClose={closeComposer} onCreate={onCreate} /> : null}
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        onNew={() => {
+          if (phase === "ready") setComposerOpen(true)
+        }}
+        onSearch={() => searchRef.current?.focus()}
+        onTheme={toggleTheme}
+      />
       {toast ? (
-        <div key={toast.id} className="toast" role="alert" tabIndex={-1} ref={toastRef}>
+        <div key={toast.id} className={styles.toast} role="alert" tabIndex={-1} ref={toastRef}>
           <p>{toast.text}</p>
-          <button type="button" className="toast-dismiss" onClick={() => setToast(null)}>
+          <button type="button" onClick={() => setToast(null)}>
             Dismiss
           </button>
         </div>
@@ -422,13 +453,11 @@ export default function Scheduler() {
   )
 }
 
-function Loading() {
+function EmptyMark() {
   return (
-    <div className="skeleton" aria-hidden="true">
-      <div />
-      <div />
-      <div />
-      <div />
-    </div>
+    <svg className={styles.mark} viewBox="0 0 72 72" aria-hidden="true">
+      <rect x="10" y="16" width="52" height="42" rx="8" fill="none" stroke="currentColor" strokeWidth="2" />
+      <path d="M10 28h52M26 16v-6M46 16v-6M24 40h24" fill="none" stroke="currentColor" strokeWidth="2" />
+    </svg>
   )
 }

@@ -8,7 +8,15 @@ import {
   clockShiftNotice,
   countGraphemes,
   dayLabel,
+  earlierShouldOpen,
+  earlierSummary,
+  failedCount,
   filterPosts,
+  formatPlatformParam,
+  formatRelative,
+  isEarlierGroup,
+  parsePlatforms,
+  schedulePreset,
   visiblePosts,
   groupPosts,
   imageUrlError,
@@ -161,7 +169,7 @@ const visible = filterPosts(
     post({ id: "a", scheduledAt: future, status: "failed", content: "Launch day menu", platforms: ["instagram", "x"] }),
     post({ id: "b", scheduledAt: future, status: "scheduled", content: "Office hours", platforms: ["facebook"] }),
   ],
-  { platform: "x", status: "failed", q: "launch" },
+  { platforms: ["x"], status: "failed", q: "launch" },
 )
 assert.deepEqual(visible.map((item) => item.id), ["a"])
 const held = visiblePosts(
@@ -170,7 +178,7 @@ const held = visiblePosts(
     post({ id: "pending", scheduledAt: future, status: "scheduled", content: "Still on screen" }),
     post({ id: "other", scheduledAt: future, status: "scheduled", content: "Hidden" }),
   ],
-  { platform: "", status: "failed", q: "" },
+  { platforms: [], status: "failed", q: "" },
   ["pending"],
 )
 assert.deepEqual(held.map((item) => item.id), ["stay", "pending"])
@@ -179,7 +187,7 @@ assert.equal(canSaveQueue(1, 1, null), false)
 assert.deepEqual(
   filterPosts(
     [post({ id: "mix", scheduledAt: future, status: "scheduled", content: "Launch notes", platforms: ["x"] })],
-    { platform: "instagram", status: "", q: "launch" },
+    { platforms: ["instagram"], status: "", q: "launch" },
   ),
   [],
 )
@@ -246,5 +254,61 @@ assert.equal(claimRetry(["failed"], "failed"), null)
 assert.deepEqual(releaseRetry(["failed", "other"], "failed"), ["other"])
 assert.equal(isCurrentAttempt(2, 1), false)
 assert.equal(isCurrentAttempt(2, 2), true)
+
+const either = filterPosts(
+  [
+    post({ id: "ig", scheduledAt: future, status: "scheduled", platforms: ["instagram"], content: "One" }),
+    post({ id: "fb", scheduledAt: future, status: "scheduled", platforms: ["facebook"], content: "Two" }),
+    post({ id: "both", scheduledAt: future, status: "scheduled", platforms: ["x", "tiktok"], content: "Three" }),
+  ],
+  { platforms: ["instagram", "x"], status: "", q: "" },
+)
+assert.deepEqual(either.map((item) => item.id), ["ig", "both"])
+assert.deepEqual(parsePlatforms("instagram"), ["instagram"])
+assert.deepEqual(parsePlatforms("x,instagram,nope"), ["instagram", "x"])
+assert.equal(parsePlatforms("nope").length, 0)
+assert.equal(formatPlatformParam(["x", "instagram"]), "instagram,x")
+const noon = new Date(2026, 9, 14, 12, 0, 0)
+assert.equal(formatRelative(new Date(2026, 9, 14, 14, 0, 0).toISOString(), noon), "in 2h")
+assert.equal(formatRelative(new Date(2026, 9, 15, 9, 0, 0).toISOString(), noon).startsWith("Tomorrow"), true)
+const monday = new Date(schedulePreset("monday", noon))
+assert.equal(monday.getDay(), 1)
+assert.equal(monday.getHours(), 9)
+const yesterdayGroup = {
+  label: "Yesterday",
+  posts: [post({ id: "old", scheduledAt: at(13, 9), status: "failed", errorMessage: "Still failed" })],
+}
+const olderGroup = {
+  label: "Older",
+  posts: [
+    post({ id: "older-ok", scheduledAt: at(12, 9), status: "published" }),
+    post({ id: "older-bad", scheduledAt: at(12, 11), status: "failed", errorMessage: "Old failure" }),
+  ],
+}
+assert.equal(isEarlierGroup(yesterdayGroup, now), false)
+assert.equal(isEarlierGroup(olderGroup, now), true)
+assert.equal(isEarlierGroup({ label: "Today", posts: [post({ id: "now", scheduledAt: future, status: "scheduled" })] }, now), false)
+assert.equal(failedCount(olderGroup.posts), 1)
+assert.deepEqual(earlierSummary([olderGroup, { label: "Older still", posts: [post({ id: "bad-2", scheduledAt: at(11, 9), status: "failed" })] }]), {
+  posts: 3,
+  failed: 2,
+})
+assert.equal(earlierShouldOpen({ status: "failed", q: "" }), true)
+assert.equal(earlierShouldOpen({ status: "", q: "menu" }), true)
+assert.equal(earlierShouldOpen({ status: "scheduled", q: "" }), false)
+assert.equal(earlierShouldOpen({ status: "", q: "   " }), false)
+const placed = groupPosts(
+  [
+    ...yesterdayGroup.posts,
+    ...olderGroup.posts,
+    post({ id: "today", scheduledAt: at(14, 15), status: "scheduled" }),
+  ],
+  now,
+)
+assert.deepEqual(
+  placed.filter((group) => !isEarlierGroup(group, now)).map((group) => group.label),
+  ["Today", "Yesterday"],
+)
+assert.equal(placed.filter((group) => isEarlierGroup(group, now)).length, 1)
 
 console.log("schedule checks passed")

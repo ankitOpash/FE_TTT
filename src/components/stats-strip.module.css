@@ -1,0 +1,50 @@
+.strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.strip button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  cursor: pointer;
+}
+
+.strip button[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.failed {
+  color: var(--failed);
+  border-color: var(--failed);
+}
+
+.note {
+  font-size: var(--meta);
+  font-weight: 600;
+}
+
+.retryAll {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--failed);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--failed);
+  cursor: pointer;
+}
+
+.retryAll:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}

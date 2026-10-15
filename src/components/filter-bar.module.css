@@ -1,0 +1,145 @@
+.bar {
+  display: grid;
+  gap: var(--gap);
+  margin: var(--space-2) 0;
+}
+
+.sheetToggle {
+  display: none;
+}
+
+.controls {
+  display: grid;
+  gap: var(--gap);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.group legend,
+.statusLabel {
+  margin-right: 4px;
+  color: var(--muted);
+  font-size: var(--meta);
+}
+
+.chip,
+.tab,
+.clear,
+.sheetToggle,
+.closeSheet {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  cursor: pointer;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chip[aria-pressed="true"],
+.tab[aria-selected="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.count {
+  color: var(--muted);
+  font-size: var(--meta);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.active {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--ink);
+  font-size: var(--meta);
+}
+
+.active button {
+  min-width: 32px;
+  min-height: 32px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.backdrop {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .sheetToggle {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .controls {
+    display: none;
+  }
+
+  .controlsOpen {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-sheet);
+  }
+
+  .backdrop {
+    display: block;
+    position: absolute;
+    inset: 0;
+    border: 0;
+    background: rgba(24, 24, 27, 0.45);
+  }
+
+  .sheet {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    display: grid;
+    gap: var(--gap);
+    max-height: 80vh;
+    padding: var(--space-2);
+    overflow: auto;
+    border-radius: var(--radius) var(--radius) 0 0;
+    background: var(--card);
+  }
+}

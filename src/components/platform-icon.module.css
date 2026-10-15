@@ -1,0 +1,30 @@
+.mark {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+  flex: none;
+}
+
+.facebook {
+  color: #1877f2;
+}
+
+.instagram {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  color: #c13584;
+}
+
+.x {
+  color: var(--ink);
+}
+
+.tiktok {
+  color: var(--ink);
+}
+
+.dot {
+  fill: currentColor;
+  stroke: none;
+}

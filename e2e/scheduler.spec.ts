@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test"
 
 async function open(page: Page, path = "/") {
   await page.goto(path)
-  await expect(page.locator(".count")).toHaveText(/^\d+ of \d+ posts$/)
+  await expect(page.getByText(/^Showing \d+ of \d+$/)).toBeVisible()
 }
 
 function forceRandom(page: Page, value: number) {
@@ -21,19 +21,17 @@ test("search keeps every character when typing fast", async ({ page }) => {
 
 test("filters stack in the URL and survive reload and back", async ({ page }) => {
   await open(page)
-  const platform = page.getByRole("combobox", { name: "Platform" })
-  const status = page.getByRole("combobox", { name: "Status" })
-  await platform.selectOption("tiktok")
-  await status.selectOption("scheduled")
+  await page.getByRole("button", { name: "TikTok", exact: true }).click()
+  await page.getByRole("tab", { name: /^Scheduled/ }).click()
   await expect(page).toHaveURL(/platform=tiktok&status=scheduled/)
 
   await page.reload()
-  await expect(platform).toHaveValue("tiktok")
-  await expect(status).toHaveValue("scheduled")
+  await expect(page.getByRole("button", { name: "TikTok", exact: true })).toHaveAttribute("aria-pressed", "true")
+  await expect(page.getByRole("tab", { name: /^Scheduled/ })).toHaveAttribute("aria-selected", "true")
 
   await page.goBack()
-  await expect(platform).toHaveValue("tiktok")
-  await expect(status).toHaveValue("")
+  await expect(page.getByRole("button", { name: "TikTok", exact: true })).toHaveAttribute("aria-pressed", "true")
+  await expect(page.getByRole("tab", { name: /^All/ })).toHaveAttribute("aria-selected", "true")
 })
 
 test("a failed retry restores the original error and announces the failure", async ({ page }) => {
@@ -43,8 +41,8 @@ test("a failed retry restores the original error and announces the failure", asy
   await expect(card).toContainText("Instagram returned a media format error")
 
   await card.getByRole("button", { name: /^Retry/ }).click()
-  await expect(page.locator(".toast")).toContainText("The platform rejected this retry")
-  await expect(card.locator(".pill")).toHaveText("failed")
+  await expect(page.getByRole("alert").filter({ hasText: "The platform rejected this retry" })).toBeVisible()
+  await expect(card.getByText("Failed", { exact: true })).toBeVisible()
   await expect(card).toContainText("Instagram returned a media format error")
 })
 
@@ -53,7 +51,7 @@ test("a successful retry of a past post marks it published", async ({ page }) =>
   await open(page, "/?status=failed")
   const card = page.locator("article").filter({ hasText: "Carousel draft" })
   await card.getByRole("button", { name: /^Retry/ }).click()
-  await expect(page.locator(".toast")).toContainText("marked published")
+  await expect(page.getByRole("alert").filter({ hasText: "marked published" })).toBeVisible()
 
   await page.goto("/?status=published&q=carousel")
   await expect(page.locator("article").filter({ hasText: "Carousel draft" })).toBeVisible()
@@ -62,16 +60,16 @@ test("a successful retry of a past post marks it published", async ({ page }) =>
 test("reset during a retry keeps the whole queue", async ({ page }) => {
   await forceRandom(page, 0.9)
   await open(page)
-  await expect(page.locator(".count")).toHaveText("32 of 32 posts")
+  await expect(page.getByText(/^Showing \d+ of \d+$/)).toHaveText("Showing 32 of 32")
 
-  await page.locator("article .retry").first().click()
+  await page.getByRole("button", { name: /^Retry/ }).first().click()
   await page.waitForTimeout(300)
   await page.getByRole("button", { name: "Reset demo data" }).click()
   await page.waitForTimeout(1500)
-  await expect(page.locator(".count")).toHaveText("32 of 32 posts")
+  await expect(page.getByText(/^Showing \d+ of \d+$/)).toHaveText("Showing 32 of 32")
 
   await page.reload()
-  await expect(page.locator(".count")).toHaveText("32 of 32 posts")
+  await expect(page.getByText(/^Showing \d+ of \d+$/)).toHaveText("Showing 32 of 32")
 })
 
 test("the composer cannot be discarded while a post is saving", async ({ page }) => {
@@ -90,7 +88,7 @@ test("the composer cannot be discarded while a post is saving", async ({ page })
   await page.keyboard.press("Escape")
   await expect(page.getByRole("dialog")).toBeVisible()
 
-  await expect(page.locator(".toast")).toContainText("Scheduled")
+  await expect(page.getByRole("alert").filter({ hasText: "Scheduled" })).toBeVisible()
   await expect(page.getByRole("dialog")).toBeHidden()
   expect(dialogs).toEqual([])
 })
@@ -98,7 +96,7 @@ test("the composer cannot be discarded while a post is saving", async ({ page })
 test("counters use graphemes and block only real overflows", async ({ page }) => {
   await open(page)
   await page.getByRole("button", { name: "New post" }).first().click()
-  await page.getByRole("button", { name: "X", exact: true }).click()
+  await page.getByRole("dialog").getByRole("button", { name: "X", exact: true }).click()
   const caption = page.getByRole("textbox", { name: "Post" })
   const schedule = page.getByRole("button", { name: "Schedule post" })
 
@@ -124,11 +122,12 @@ test.describe("in Pacific/Auckland", () => {
       const pad = (value: number) => String(value).padStart(2, "0")
       return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T00:30`
     })
+    await page.getByRole("button", { name: "Custom", exact: true }).click()
     await page.getByRole("dialog").getByLabel("Schedule").fill(tomorrow)
     await page.getByRole("button", { name: "Schedule post" }).click()
     await expect(page.getByRole("dialog")).toBeHidden()
 
-    const group = page.locator("section.day").filter({ has: page.getByRole("heading", { name: /^Tomorrow/ }) })
+    const group = page.getByRole("region", { name: /^Tomorrow/ })
     await expect(group).toContainText("Auckland midnight check")
     await expect(group.locator("article").filter({ hasText: "Auckland midnight check" }).locator("time")).toHaveText(
       "12:30 AM",
@@ -147,6 +146,6 @@ test.describe("on a phone", () => {
 
   test("collapsed filters say how many are active", async ({ page }) => {
     await open(page, "/?platform=x&status=failed")
-    await expect(page.getByRole("button", { name: "Show filters (2 active)" })).toBeVisible()
+    await expect(page.getByRole("button", { name: "Filters, 2 active" })).toBeVisible()
   })
 })
