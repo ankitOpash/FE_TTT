@@ -1,7 +1,14 @@
 import assert from "node:assert/strict"
 import {
   applyStoredCreate,
+  applyStoredDelete,
   applyStoredRetry,
+  applyStoredUpdate,
+  blankChannel,
+  canEditPost,
+  channelProblems,
+  channelReady,
+  duplicateFrom,
   canSaveQueue,
   claimRetry,
   clipGraphemes,
@@ -21,18 +28,25 @@ import {
   groupPosts,
   imageUrlError,
   isCurrentAttempt,
+  isFutureTime,
   isUtcTimestamp,
   localInputToUtc,
   mergeQuery,
   platformsOverLimit,
+  nextScheduledPost,
+  parseDayParam,
+  publishingHealth,
   releaseRetry,
+  retargetLocalDay,
   retryShouldFail,
   scheduleBlockers,
   settleRetryFailure,
   settleRetrySuccess,
   shiftNotice,
   shiftSeed,
+  currentWeekRange,
   toLocalInputValue,
+  withinRange,
   type Post,
 } from "./schedule"
 
@@ -274,6 +288,36 @@ assert.equal(formatRelative(new Date(2026, 9, 15, 9, 0, 0).toISOString(), noon).
 const monday = new Date(schedulePreset("monday", noon))
 assert.equal(monday.getDay(), 1)
 assert.equal(monday.getHours(), 9)
+const moved = new Date(retargetLocalDay(new Date(2026, 9, 14, 15, 30, 0).toISOString(), new Date(2026, 9, 20, 8, 0, 0)))
+assert.equal(moved.getDate(), 20)
+assert.equal(moved.getHours(), 15)
+assert.equal(moved.getMinutes(), 30)
+assert.equal(retargetLocalDay("not-a-date", new Date()), "")
+const ranged = new Date(2026, 9, 14, 15, 0, 0).toISOString()
+assert.equal(withinRange(ranged, "2026-10-14", "2026-10-14"), true)
+assert.equal(withinRange(ranged, "2026-10-15", ""), false)
+assert.equal(parseDayParam("2026-02-31"), "")
+const week = currentWeekRange(new Date(2026, 9, 14, 12, 0, 0))
+assert.equal(week.from, "2026-10-11")
+assert.equal(week.to, "2026-10-17")
+assert.deepEqual(
+  publishingHealth([
+    post({ id: "pub", scheduledAt: future, status: "published" }),
+    post({ id: "bad", scheduledAt: future, status: "failed", errorMessage: "No" }),
+    post({ id: "wait", scheduledAt: future, status: "scheduled" }),
+  ]),
+  { published: 1, failed: 1, rate: 50 },
+)
+assert.equal(
+  nextScheduledPost(
+    [
+      post({ id: "later", scheduledAt: new Date(2026, 9, 20, 9, 0, 0).toISOString(), status: "scheduled" }),
+      post({ id: "sooner", scheduledAt: new Date(2026, 9, 16, 9, 0, 0).toISOString(), status: "scheduled" }),
+    ],
+    new Date(2026, 9, 15, 12, 0, 0).getTime(),
+  )?.id,
+  "sooner",
+)
 const yesterdayGroup = {
   label: "Yesterday",
   posts: [post({ id: "old", scheduledAt: at(13, 9), status: "failed", errorMessage: "Still failed" })],
@@ -310,5 +354,29 @@ assert.deepEqual(
   ["Today", "Yesterday"],
 )
 assert.equal(placed.filter((group) => isEarlierGroup(group, now)).length, 1)
+
+const source = post({ id: "src", scheduledAt: at(13, 9), status: "published", content: "Copy me", platforms: ["x"] })
+const copy = duplicateFrom(source, "copy", now.getTime())
+assert.equal(copy.id, "copy")
+assert.equal(copy.content, "Copy me")
+assert.equal(canEditPost(source), false)
+assert.equal(canEditPost(post({ id: "open", scheduledAt: future, status: "scheduled" })), true)
+assert.equal(canEditPost(post({ id: "bad", scheduledAt: at(11, 9), status: "failed" })), true)
+assert.equal(copy.status, "scheduled")
+assert.equal(isFutureTime(copy.scheduledAt, now.getTime()), true)
+assert.equal(
+  duplicateFrom(post({ id: "later", scheduledAt: future, status: "scheduled", content: "Later" }), "copy-2", now.getTime()).scheduledAt,
+  future,
+)
+assert.equal(applyStoredUpdate([source], { ...source, content: "Edited" })?.[0].content, "Edited")
+assert.equal(applyStoredUpdate([source], post({ id: "missing", scheduledAt: future, status: "scheduled" })), null)
+assert.deepEqual(applyStoredDelete([source], "src"), [])
+assert.equal(applyStoredDelete([source], "missing"), null)
+assert.equal(channelReady(blankChannel()), false)
+assert.equal(channelProblems({ ...blankChannel(), name: "North door" }), "Add an API key.")
+assert.equal(channelProblems({ ...blankChannel(), apiKey: "key" }), "Add a secret key.")
+assert.equal(channelProblems({ ...blankChannel(), apiKey: "key", secret: "secret", webhook: "not a url" }), "Webhook must be a full URL.")
+assert.equal(channelReady({ ...blankChannel(), apiKey: "key", secret: "secret" }), true)
+assert.equal(channelReady({ ...blankChannel(), apiKey: "key", secret: "secret", webhook: "https://example.com/hook" }), true)
 
 console.log("schedule checks passed")

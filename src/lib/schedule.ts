@@ -30,6 +30,35 @@ export const PLATFORM_LABEL: Record<Platform, string> = {
   tiktok: "TikTok",
 }
 
+export type ChannelDraft = {
+  name: string
+  apiKey: string
+  secret: string
+  webhook: string
+}
+
+export function blankChannel(): ChannelDraft {
+  return { name: "", apiKey: "", secret: "", webhook: "" }
+}
+
+export function channelProblems(draft: ChannelDraft): string | null {
+  if (!draft.apiKey.trim()) return "Add an API key."
+  if (!draft.secret.trim()) return "Add a secret key."
+  const webhook = draft.webhook.trim()
+  if (!webhook) return null
+  try {
+    const url = new URL(webhook)
+    if (url.protocol !== "https:" && url.protocol !== "http:") return "Webhook must start with http:// or https://."
+  } catch {
+    return "Webhook must be a full URL."
+  }
+  return null
+}
+
+export function channelReady(draft: ChannelDraft): boolean {
+  return channelProblems(draft) === null
+}
+
 export const SEED_ANCHOR_UTC = Date.UTC(2026, 9, 14)
 export const RETRY_FAIL_RATE = 0.2
 
@@ -37,6 +66,8 @@ export type Filters = {
   platforms: Platform[]
   status: Status | ""
   q: string
+  from?: string
+  to?: string
 }
 
 export function asPlatform(value: string | null): Platform | "" {
@@ -263,7 +294,107 @@ function matchesFilters(post: Post, filters: Filters, needle = filters.q.trim().
   }
   if (filters.status && post.status !== filters.status) return false
   if (needle && !post.content.toLowerCase().includes(needle)) return false
+  if (!withinRange(post.scheduledAt, filters.from ?? "", filters.to ?? "")) return false
   return true
+}
+
+export function parseDayParam(value: string | null): string {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return ""
+  const [year, month, day] = value.split("-").map(Number)
+  const date = new Date(year, month - 1, day)
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return ""
+  return value
+}
+
+export function formatDayParam(date: Date): string {
+  const pad = (value: number) => String(value).padStart(2, "0")
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+}
+
+function dayStamp(value: string): number {
+  const parsed = parseDayParam(value)
+  if (!parsed) return Number.NaN
+  const [year, month, day] = parsed.split("-").map(Number)
+  return new Date(year, month - 1, day).getTime()
+}
+
+export function withinRange(iso: string, from: string, to: string): boolean {
+  if (!from && !to) return true
+  const day = localDayStart(new Date(iso))
+  if (!Number.isFinite(day)) return false
+  if (from && day < dayStamp(from)) return false
+  if (to && day > dayStamp(to)) return false
+  return true
+}
+
+export function currentWeekRange(now = new Date()): { from: string; to: string } {
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  start.setDate(start.getDate() - start.getDay())
+  const end = new Date(start)
+  end.setDate(start.getDate() + 6)
+  return { from: formatDayParam(start), to: formatDayParam(end) }
+}
+
+export function publishingHealth(posts: readonly Post[]): { published: number; failed: number; rate: number } {
+  const published = posts.filter((post) => post.status === "published").length
+  const failed = posts.filter((post) => post.status === "failed").length
+  const decided = published + failed
+  return { published, failed, rate: decided === 0 ? 0 : Math.round((published / decided) * 100) }
+}
+
+export function nextScheduledPost(posts: readonly Post[], now = Date.now()): Post | null {
+  let best: Post | null = null
+  let bestTime = Number.POSITIVE_INFINITY
+  for (const post of posts) {
+    if (post.status !== "scheduled") continue
+    const time = new Date(post.scheduledAt).getTime()
+    if (time > now && time < bestTime) {
+      best = post
+      bestTime = time
+    }
+  }
+  return best
+}
+
+export function busiestPublishedHour(posts: readonly Post[]): { hour: number; count: number } | null {
+  const counts = new Array<number>(24).fill(0)
+  for (const post of posts) {
+    if (post.status !== "published") continue
+    const hour = new Date(post.scheduledAt).getHours()
+    if (hour >= 0 && hour < 24) counts[hour] += 1
+  }
+  let hour = 0
+  for (let index = 1; index < counts.length; index += 1) {
+    if (counts[index] > counts[hour]) hour = index
+  }
+  return counts[hour] > 0 ? { hour, count: counts[hour] } : null
+}
+
+export type WeekBar = { label: string; published: number; failed: number }
+
+export function currentWeekActivity(posts: readonly Post[], now = new Date()): WeekBar[] {
+  const { from } = currentWeekRange(now)
+  const [year, month, day] = from.split("-").map(Number)
+  const start = new Date(year, month - 1, day)
+  const bars: WeekBar[] = []
+  for (let index = 0; index < 7; index += 1) {
+    const date = new Date(start)
+    date.setDate(start.getDate() + index)
+    const key = localDayStart(date)
+    let published = 0
+    let failed = 0
+    for (const post of posts) {
+      if (localDayStart(new Date(post.scheduledAt)) !== key) continue
+      if (post.status === "published") published += 1
+      if (post.status === "failed") failed += 1
+    }
+    bars.push({
+      label: date.toLocaleDateString(undefined, { weekday: "narrow" }),
+      published,
+      failed,
+    })
+  }
+  return bars
 }
 
 function yesterdayStart(now: Date): number {
@@ -380,6 +511,34 @@ export function applyStoredCreate(posts: Post[] | null, post: Post): Post[] | nu
   return [post, ...posts.filter((item) => item.id !== post.id)]
 }
 
+export function applyStoredUpdate(posts: Post[] | null, post: Post): Post[] | null {
+  if (posts == null || !posts.some((item) => item.id === post.id)) return null
+  return posts.map((item) => (item.id === post.id ? post : item))
+}
+
+export function applyStoredDelete(posts: Post[] | null, id: string): Post[] | null {
+  if (posts == null || !posts.some((item) => item.id === id)) return null
+  return posts.filter((item) => item.id !== id)
+}
+
+export function canEditPost(post: Pick<Post, "status">): boolean {
+  return post.status !== "published"
+}
+
+export function duplicateFrom(source: Post, id: string, now = Date.now()): Post {
+  const scheduledAt = isFutureTime(source.scheduledAt, now)
+    ? source.scheduledAt
+    : new Date(now + 60 * 60 * 1000).toISOString()
+  return {
+    id,
+    content: source.content,
+    platforms: source.platforms,
+    scheduledAt,
+    status: "scheduled",
+    ...(source.mediaUrl ? { mediaUrl: source.mediaUrl } : {}),
+  }
+}
+
 export function applyStoredRetry(posts: Post[] | null, id: string, now = Date.now()): Post[] | null {
   if (posts == null) return null
   const original = posts.find((item) => item.id === id)
@@ -411,6 +570,21 @@ export function shiftSeed(posts: Post[], now = Date.now()): Post[] {
     ...post,
     scheduledAt: new Date(new Date(post.scheduledAt).getTime() + delta).toISOString(),
   }))
+}
+
+export function retargetLocalDay(iso: string, day: Date): string {
+  const current = new Date(iso)
+  if (!Number.isFinite(current.getTime()) || !Number.isFinite(day.getTime())) return ""
+  const next = new Date(
+    day.getFullYear(),
+    day.getMonth(),
+    day.getDate(),
+    current.getHours(),
+    current.getMinutes(),
+    current.getSeconds(),
+    current.getMilliseconds(),
+  )
+  return next.toISOString()
 }
 
 export function toLocalInputValue(date: Date): string {

@@ -2,7 +2,11 @@ import {
   PLATFORMS,
   RETRY_ERROR,
   applyStoredCreate,
+  applyStoredDelete,
   applyStoredRetry,
+  applyStoredUpdate,
+  duplicateFrom,
+  canEditPost,
   canSaveQueue,
   isUtcTimestamp,
   retryShouldFail,
@@ -149,4 +153,50 @@ export async function retryPost(
   savePosts(next)
   const saved = next.find((item) => item.id === id)
   return saved ?? null
+}
+
+export async function updatePost(post: Post, token = queueToken(), now = Date.now()): Promise<Post | null> {
+  await wait(CREATE_MS)
+  const stored = readStored()
+  const original = stored?.find((item) => item.id === post.id)
+  if (!original || !canSaveQueue(token, queueToken(), stored)) return null
+  if (!canEditPost(original)) throw new Error("This post is already published.")
+  const reasons = scheduleBlockers({
+    content: post.content,
+    platforms: post.platforms,
+    scheduledAt: post.scheduledAt,
+    mediaUrl: post.mediaUrl,
+    now,
+  }).filter((reason) => !(reason === "Choose a time in the future." && post.scheduledAt === original.scheduledAt))
+  if (reasons.length > 0) throw new Error(reasons[0])
+  const saved: Post =
+    original.status === "failed"
+      ? { ...post, status: "failed", errorMessage: original.errorMessage }
+      : { ...post, status: original.status }
+  const next = applyStoredUpdate(stored, saved)
+  if (!canSaveQueue(token, queueToken(), next) || !next) return null
+  savePosts(next)
+  return saved
+}
+
+export async function deletePost(id: string, token = queueToken()): Promise<boolean> {
+  const stored = readStored()
+  const next = applyStoredDelete(stored, id)
+  if (!canSaveQueue(token, queueToken(), next) || !next) return false
+  savePosts(next)
+  return true
+}
+
+export async function duplicatePost(source: Post, token = queueToken(), now = Date.now()): Promise<Post | null> {
+  return createPost(duplicateFrom(source, crypto.randomUUID(), now), token, now)
+}
+
+export async function reschedulePost(id: string, scheduledAt: string, token = queueToken()): Promise<Post | null> {
+  const stored = readStored()
+  if (!canSaveQueue(token, queueToken(), stored) || !stored) return null
+  const original = stored.find((post) => post.id === id)
+  if (!original || !canEditPost(original)) return null
+  const next = stored.map((post) => (post.id === id ? { ...post, scheduledAt } : post))
+  savePosts(next)
+  return next.find((post) => post.id === id) ?? null
 }
