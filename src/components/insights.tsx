@@ -7,6 +7,7 @@ import {
   currentWeekActivity,
   formatClock,
   localZoneLabel,
+  nextPostWhen,
   nextScheduledPost,
   PLATFORM_LABEL,
   publishingHealth,
@@ -102,7 +103,7 @@ export function Insights({
         {next ? (
           <>
             <p className={styles.hour}>
-              <time dateTime={next.scheduledAt}>{formatClock(next.scheduledAt)}</time>
+              <time dateTime={next.scheduledAt}>{when ? nextPostWhen(next.scheduledAt, when) : formatClock(next.scheduledAt)}</time>
             </p>
             <p className={styles.note}>{clipGraphemes(next.content, 90)}</p>
             <ul className={styles.platforms}>

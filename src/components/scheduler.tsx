@@ -51,6 +51,21 @@ type Notice = {
 
 const STALE_QUEUE = "The queue changed in another tab. Reload to see the latest posts."
 
+let searchFocusTimer = 0
+
+function holdSearchFocus() {
+  window.clearInterval(searchFocusTimer)
+  const started = Date.now()
+  let held = 0
+  searchFocusTimer = window.setInterval(() => {
+    const field = document.querySelector<HTMLInputElement>('input[aria-label="Search"]')
+    if (field && document.activeElement !== field) field.focus()
+    if (field && document.activeElement === field) held += 30
+    else held = 0
+    if (held >= 240 || Date.now() - started > 1500) window.clearInterval(searchFocusTimer)
+  }, 30)
+}
+
 const VIEWS: readonly SchedulerView[] = ["overview", "queue", "calendar", "analytics", "media", "settings", "channels", "board"]
 
 function viewFromQuery(value: string | null): SchedulerView {
@@ -121,6 +136,8 @@ export default function Scheduler() {
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [toast, setToast] = useState<Notice | null>(null)
   const [pendingIds, setPendingIds] = useState<string[]>([])
+  const [duplicatingIds, setDuplicatingIds] = useState<string[]>([])
+  const duplicatingRef = useRef<string[]>([])
   const [freshIds, setFreshIds] = useState<string[]>([])
   const [shakeIds, setShakeIds] = useState<string[]>([])
   const pendingRef = useRef<string[]>([])
@@ -132,6 +149,7 @@ export default function Scheduler() {
   const sentQuery = useRef(query)
   const searchTimer = useRef<number | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
+  const openSearchRef = useRef<() => void>(() => {})
   const [draft, setDraft] = useState(query)
 
   const writeParams = useCallback(
@@ -228,7 +246,7 @@ export default function Scheduler() {
       if (typing || composerOpen || paletteOpen) return
       if (event.key === "/") {
         event.preventDefault()
-        searchRef.current?.focus()
+        openSearchRef.current()
         return
       }
       if ((event.key === "n" || event.key === "N") && !meta && !event.altKey && phase === "ready") {
@@ -267,6 +285,10 @@ export default function Scheduler() {
   }
 
   async function onDuplicate(post: Post) {
+    const claimed = claimRetry(duplicatingRef.current, post.id)
+    if (!claimed) return
+    duplicatingRef.current = claimed
+    setDuplicatingIds(claimed)
     const token = queueToken()
     try {
       const saved = await duplicatePost(post, token)
@@ -275,6 +297,10 @@ export default function Scheduler() {
       showToast("Duplicated. The copy is on the queue.", "success", false)
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Could not duplicate this post.", "error", true)
+    } finally {
+      const released = releaseRetry(duplicatingRef.current, post.id)
+      duplicatingRef.current = released
+      setDuplicatingIds(released)
     }
   }
 
@@ -444,6 +470,12 @@ export default function Scheduler() {
   function setView(next: SchedulerView) {
     writeParams({ view: next === "queue" ? "" : next }, "push")
   }
+
+  function openSearch() {
+    if (view !== "queue" && view !== "calendar" && view !== "board") setView("queue")
+    holdSearchFocus()
+  }
+  openSearchRef.current = openSearch
 
   function openQueue(next: Status | "") {
     const updates: Record<string, string> = { view: "" }
@@ -617,6 +649,7 @@ export default function Scheduler() {
             now={now}
             forceEarlier={filtersActive}
             pendingIds={pendingIds}
+            duplicatingIds={duplicatingIds}
             freshIds={freshIds}
             shakeIds={shakeIds}
             onRetry={onRetry}
@@ -628,6 +661,7 @@ export default function Scheduler() {
             posts={visible}
             now={now}
             pendingIds={pendingIds}
+            duplicatingIds={duplicatingIds}
             freshIds={freshIds}
             shakeIds={shakeIds}
             onRetry={onRetry}
@@ -640,6 +674,7 @@ export default function Scheduler() {
             posts={visible}
             now={now}
             pendingIds={pendingIds}
+            duplicatingIds={duplicatingIds}
             freshIds={freshIds}
             shakeIds={shakeIds}
             onRetry={onRetry}
@@ -688,7 +723,7 @@ export default function Scheduler() {
         onNew={() => {
           if (phase === "ready") openComposer()
         }}
-        onSearch={() => searchRef.current?.focus()}
+        onSearch={() => openSearchRef.current()}
         onTheme={toggleTheme}
         onView={setView}
         onClearFilters={clearFilters}

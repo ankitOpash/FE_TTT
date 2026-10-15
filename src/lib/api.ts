@@ -4,6 +4,7 @@ import {
   applyStoredCreate,
   applyStoredDelete,
   applyStoredRetry,
+  applyEdit,
   applyStoredUpdate,
   duplicateFrom,
   canEditPost,
@@ -170,10 +171,7 @@ export async function updatePost(post: Post, token = queueToken(), now = Date.no
     now,
   }).filter((reason) => !(reason === "Choose a time in the future." && post.scheduledAt === original.scheduledAt))
   if (reasons.length > 0) throw new Error(reasons[0])
-  const saved: Post =
-    original.status === "failed"
-      ? { ...post, status: "failed", errorMessage: original.errorMessage }
-      : { ...post, status: original.status }
+  const saved = applyEdit(original, post, now)
   const next = applyStoredUpdate(stored, saved)
   if (!canSaveQueue(token, queueToken(), next) || !next) return null
   savePosts(next)

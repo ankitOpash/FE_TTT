@@ -119,7 +119,7 @@ Lucide icons are used for Create post, Close, Retry, and a missing image. Platfo
 - Calendar and board moves have to land in the future. `reschedulePost` rejects a past time for a scheduled or failed post. A published post cannot be moved.
 - Publishing health is published posts divided by published plus failed posts. Scheduled posts are not in that rate. The week bars count published and failed posts on each local day. The busiest hour is the local hour with the most published posts. The next post is the earliest scheduled post still in the future.
 - The sidebar channels open Channel setup. Each platform can store an account name, API key, secret key, and optional webhook in `localStorage` key `dispatch.channels.v1`. Nothing is sent to a platform. The account chip says Demo account.
-- View opens the full post. Edit saves caption, platforms, image, and time back onto a scheduled or failed post and keeps its status. A published post stays as it went out: Edit is unavailable, and the calendar will not move it. Duplicate adds a scheduled copy. Delete removes the post from this browser after a confirmation. These actions stay in local storage.
+- View opens the full post. Edit saves caption, platforms, image, and time. A failed post saved at a future time becomes scheduled and drops its error. The same past time stays failed. A second Duplicate click is ignored while the first copy is still saving. A published post stays as it went out: Edit is unavailable, and the calendar will not move it. Duplicate adds a scheduled copy. Delete removes the post from this browser after a confirmation. These actions stay in local storage.
 - The composer starts with Instagram selected. An image is optional on every platform, including Instagram. A non-http(s) URL, or one that fails to load, blocks scheduling.
 - A successful retry of a future post is `scheduled`. A successful retry of a past post is `published`, so the queue does not contain a scheduled post in the past. This demo still does not call a network to publish.
 - Empty content, no platform, an over-limit platform, a bad image URL, or a time that is not strictly in the future disables Schedule post. The empty-caption message stays quiet until there is something else to correct.
@@ -134,7 +134,7 @@ Checked on 15 October 2026 in this folder:
 - `npx tsc --noEmit --pretty false --incremental false` exited 0.
 - `npm run check` printed `schedule checks passed`.
 - `npx eslint src e2e --max-warnings 0` exited 0.
-- `npm run test:e2e` built the app, served it on port 3100, and passed all 13 tests in `e2e/scheduler.spec.ts` in 52.5s.
+- `npm run test:e2e` built the app, served it on port 3100, and passed all 16 tests in `e2e/scheduler.spec.ts` in 1.2m.
 - `npm run build` compiled successfully, finished its TypeScript check, and prerendered `/`.
 
 The queue was also exercised in the browser: This week wrote `from` and `to` and changed the visible count from 32 to 21, Clear filters restored 32, search wrote `q`, Create post opened with Schedule disabled for an empty caption, theme toggled, and at 375px the button read `Filters, 2 active` while the sidebar sat off-canvas.

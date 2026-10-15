@@ -525,6 +525,30 @@ export function canEditPost(post: Pick<Post, "status">): boolean {
   return post.status !== "published"
 }
 
+export function applyEdit(
+  original: Post,
+  next: Pick<Post, "content" | "platforms" | "scheduledAt" | "mediaUrl">,
+  now = Date.now(),
+): Post {
+  const base = {
+    id: original.id,
+    content: next.content,
+    platforms: next.platforms,
+    scheduledAt: next.scheduledAt,
+    ...(next.mediaUrl ? { mediaUrl: next.mediaUrl } : {}),
+  }
+  if (original.status === "failed" && isFutureTime(next.scheduledAt, now)) return { ...base, status: "scheduled" }
+  if (original.status === "failed") return { ...base, status: "failed", errorMessage: original.errorMessage }
+  if (original.status === "published") return { ...base, status: "published" }
+  return { ...base, status: "scheduled" }
+}
+
+export function nextPostWhen(iso: string, now = new Date()): string {
+  const label = dayLabel(iso, now)
+  const clock = formatClock(iso)
+  return label === "Today" ? clock : `${label} ${clock}`
+}
+
 export function canMovePost(post: Pick<Post, "status">, scheduledAt: string, now = Date.now()): boolean {
   return canEditPost(post) && isFutureTime(scheduledAt, now)
 }

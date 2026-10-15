@@ -10,6 +10,7 @@ function DaySection({
   posts,
   now,
   pendingIds,
+  duplicatingIds,
   freshIds,
   shakeIds,
   onRetry,
@@ -19,6 +20,7 @@ function DaySection({
   posts: Post[]
   now: number
   pendingIds: readonly string[]
+  duplicatingIds: readonly string[]
   freshIds: readonly string[]
   shakeIds: readonly string[]
   onRetry: (post: Post) => void
@@ -37,6 +39,7 @@ function DaySection({
             post={post}
             now={now}
             retrying={pendingIds.includes(post.id)}
+            duplicating={duplicatingIds.includes(post.id)}
             fresh={freshIds.includes(post.id)}
             shake={shakeIds.includes(post.id)}
             onRetry={onRetry}
@@ -64,6 +67,7 @@ export function QueueList({
   now,
   forceEarlier,
   pendingIds,
+  duplicatingIds,
   freshIds,
   shakeIds,
   onRetry,
@@ -73,6 +77,7 @@ export function QueueList({
   now: number
   forceEarlier: boolean
   pendingIds: readonly string[]
+  duplicatingIds: readonly string[]
   freshIds: readonly string[]
   shakeIds: readonly string[]
   onRetry: (post: Post) => void
@@ -83,7 +88,7 @@ export function QueueList({
   const upcoming = clock ? groups.filter((group) => !isEarlierGroup(group, clock)) : groups
   const earlier = clock ? groups.filter((group) => isEarlierGroup(group, clock)) : []
   const earlierCount = earlier.reduce((sum, group) => sum + group.posts.length, 0)
-  const shared = { now, pendingIds, freshIds, shakeIds, onRetry, onAction }
+  const shared = { now, pendingIds, duplicatingIds, freshIds, shakeIds, onRetry, onAction }
 
   return (
     <div className={styles.list}>

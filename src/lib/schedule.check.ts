@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 import {
+  applyEdit,
   applyStoredCreate,
   applyStoredDelete,
   applyStoredRetry,
@@ -34,6 +35,7 @@ import {
   localInputToUtc,
   mergeQuery,
   platformsOverLimit,
+  nextPostWhen,
   nextScheduledPost,
   parseDayParam,
   publishingHealth,
@@ -367,6 +369,17 @@ assert.equal(canMovePost(post({ id: "open", scheduledAt: future, status: "schedu
 assert.equal(canMovePost(post({ id: "bad", scheduledAt: at(11, 9), status: "failed" }), future, now.getTime()), true)
 assert.equal(canMovePost(post({ id: "bad", scheduledAt: at(11, 9), status: "failed" }), at(11, 9), now.getTime()), false)
 assert.equal(canMovePost(source, future, now.getTime()), false)
+const failedEdit = post({ id: "bad", scheduledAt: at(11, 9), status: "failed", content: "Hook", errorMessage: "Old failure" })
+const rescheduled = applyEdit(failedEdit, { ...failedEdit, content: "New hook", scheduledAt: future }, now.getTime())
+assert.equal(rescheduled.status, "scheduled")
+assert.equal(rescheduled.content, "New hook")
+assert.equal("errorMessage" in rescheduled, false)
+const stillFailed = applyEdit(failedEdit, { ...failedEdit, content: "New hook" }, now.getTime())
+assert.equal(stillFailed.status, "failed")
+assert.equal(stillFailed.status === "failed" ? stillFailed.errorMessage : "", "Old failure")
+assert.equal(nextPostWhen(at(14, 15), now), new Date(at(14, 15)).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }))
+assert.equal(nextPostWhen(at(18, 9), now).startsWith(dayLabel(at(18, 9), now)), true)
+assert.notEqual(nextPostWhen(at(18, 9), now), new Date(at(18, 9)).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }))
 assert.equal(copy.status, "scheduled")
 assert.equal(isFutureTime(copy.scheduledAt, now.getTime()), true)
 assert.equal(

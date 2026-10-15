@@ -198,6 +198,60 @@ test("calendar stays in the URL after a refresh", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Board", exact: true })).toBeVisible()
 })
 
+test("a second Duplicate click does not add another copy", async ({ page }) => {
+  await open(page, "/?status=scheduled")
+  const card = page.locator("article").filter({ hasText: "Lunch special" })
+  await card.getByRole("button", { name: "Post actions" }).click()
+  await page.evaluate(() => {
+    const button = [...document.querySelectorAll("button")].find((item) => item.textContent?.trim() === "Duplicate")
+    if (!button) throw new Error("missing duplicate")
+    button.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    button.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+  })
+  await expect(page.getByRole("alert").filter({ hasText: "Duplicated" })).toBeVisible()
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          JSON.parse(localStorage.getItem("dispatch.posts.v1") ?? "[]").filter((post: { content: string }) =>
+            post.content.startsWith("Lunch special"),
+          ).length,
+      ),
+    )
+    .toBe(2)
+})
+
+test("saving a failed post in the future clears the failure", async ({ page }) => {
+  await open(page, "/?status=failed")
+  const card = page.locator("article").filter({ hasText: "Carousel draft" })
+  await card.getByRole("button", { name: "Post actions" }).click()
+  await page.getByRole("button", { name: "Edit", exact: true }).click()
+  const composer = page.getByRole("dialog", { name: "Edit post" })
+  await composer.getByRole("button", { name: "Tomorrow 9 AM" }).click()
+  await composer.getByRole("button", { name: "Save changes" }).click()
+  await expect(page.getByRole("alert").filter({ hasText: "Changes saved." })).toBeVisible()
+  await page.goto("/?status=scheduled&q=carousel")
+  const saved = page.locator("article").filter({ hasText: "Carousel draft" })
+  await expect(saved).toBeVisible()
+  await expect(saved.getByText("Failed", { exact: true })).toHaveCount(0)
+})
+
+test("search from settings opens the queue search", async ({ page }) => {
+  await page.goto("/?view=settings")
+  await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible()
+  await page.getByRole("button", { name: "Commands" }).click()
+  await page.getByRole("dialog", { name: "Commands" }).getByRole("button", { name: "Search posts" }).click()
+  await expect(page).not.toHaveURL(/view=/)
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        const field = document.querySelector('[aria-label="Search"]')
+        return document.activeElement === field ? "Search" : document.activeElement?.getAttribute("aria-label") || document.activeElement?.tagName || "none"
+      }),
+    )
+    .toBe("Search")
+})
+
 test("dragging a scheduled post onto another day moves it", async ({ page }) => {
   await open(page, "/?view=calendar&status=scheduled")
   const chip = page.getByRole("button", { name: /Lunch special/ })

@@ -38,6 +38,7 @@ export function PostCard({
   post,
   now,
   retrying,
+  duplicating,
   fresh,
   shake,
   onRetry,
@@ -46,6 +47,7 @@ export function PostCard({
   post: Post
   now: number
   retrying: boolean
+  duplicating: boolean
   fresh: boolean
   shake: boolean
   onRetry: (post: Post) => void
@@ -169,7 +171,11 @@ export function PostCard({
                 <li key={action}>
                   <button
                     type="button"
-                    disabled={(retrying && action !== "View") || (action === "Edit" && !editable)}
+                    disabled={
+                      (retrying && action !== "View") ||
+                      (action === "Edit" && !editable) ||
+                      (action === "Duplicate" && duplicating)
+                    }
                     title={action === "Edit" && !editable ? "Already published. Duplicate it to schedule a change." : undefined}
                     aria-label={action === "Edit" && !editable ? "Edit unavailable. This post is already published." : undefined}
                     onClick={() => {

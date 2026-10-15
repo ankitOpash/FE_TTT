@@ -8,6 +8,7 @@ import styles from "./views.module.css"
 type Handlers = {
   now: number
   pendingIds: readonly string[]
+  duplicatingIds: readonly string[]
   freshIds: readonly string[]
   shakeIds: readonly string[]
   onRetry: (post: Post) => void
@@ -21,6 +22,7 @@ function renderCard(post: Post, handlers: Handlers) {
       post={post}
       now={handlers.now}
       retrying={handlers.pendingIds.includes(post.id)}
+      duplicating={handlers.duplicatingIds.includes(post.id)}
       fresh={handlers.freshIds.includes(post.id)}
       shake={handlers.shakeIds.includes(post.id)}
       onRetry={handlers.onRetry}
