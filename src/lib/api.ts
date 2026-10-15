@@ -7,6 +7,7 @@ import {
   applyStoredUpdate,
   duplicateFrom,
   canEditPost,
+  canMovePost,
   canSaveQueue,
   isUtcTimestamp,
   retryShouldFail,
@@ -191,11 +192,16 @@ export async function duplicatePost(source: Post, token = queueToken(), now = Da
   return createPost(duplicateFrom(source, crypto.randomUUID(), now), token, now)
 }
 
-export async function reschedulePost(id: string, scheduledAt: string, token = queueToken()): Promise<Post | null> {
+export async function reschedulePost(
+  id: string,
+  scheduledAt: string,
+  token = queueToken(),
+  now = Date.now(),
+): Promise<Post | null> {
   const stored = readStored()
   if (!canSaveQueue(token, queueToken(), stored) || !stored) return null
   const original = stored.find((post) => post.id === id)
-  if (!original || !canEditPost(original)) return null
+  if (!original || !canMovePost(original, scheduledAt, now)) return null
   const next = stored.map((post) => (post.id === id ? { ...post, scheduledAt } : post))
   savePosts(next)
   return next.find((post) => post.id === id) ?? null

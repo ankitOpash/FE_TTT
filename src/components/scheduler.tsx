@@ -7,6 +7,7 @@ import { clearPosts, createPost, deletePost, duplicatePost, fetchPosts, invalida
 import {
   asStatus,
   canEditPost,
+  canMovePost,
   claimRetry,
   clipGraphemes,
   currentWeekRange,
@@ -14,7 +15,6 @@ import {
   formatPlatformParam,
   groupPosts,
   isCurrentAttempt,
-  isFutureTime,
   localZoneLabel,
   mergeQuery,
   parseDayParam,
@@ -51,6 +51,13 @@ type Notice = {
 
 const STALE_QUEUE = "The queue changed in another tab. Reload to see the latest posts."
 
+const VIEWS: readonly SchedulerView[] = ["overview", "queue", "calendar", "analytics", "media", "settings", "channels", "board"]
+
+function viewFromQuery(value: string | null): SchedulerView {
+  if (value && VIEWS.includes(value as SchedulerView)) return value as SchedulerView
+  return "queue"
+}
+
 const COPY: Record<SchedulerView, { title: string; description: string }> = {
   overview: {
     title: "Overview",
@@ -62,7 +69,7 @@ const COPY: Record<SchedulerView, { title: string; description: string }> = {
   },
   calendar: {
     title: "Calendar",
-    description: "Move posts across days. Scheduled posts stay in the future.",
+    description: "Move posts across days. The new time has to be in the future.",
   },
   analytics: {
     title: "Analytics",
@@ -97,11 +104,11 @@ export default function Scheduler() {
   const query = searchParams.get("q") ?? ""
   const from = parseDayParam(searchParams.get("from"))
   const to = parseDayParam(searchParams.get("to"))
+  const view = viewFromQuery(searchParams.get("view"))
   const [posts, setPosts] = useState<Post[] | null>(null)
   const [phase, setPhase] = useState<"loading" | "ready" | "error">("loading")
   const [loadError, setLoadError] = useState("")
   const [tick, setTick] = useState(0)
-  const [view, setView] = useState<SchedulerView>("queue")
   const [channelFocus, setChannelFocus] = useState<Platform>("facebook")
   const [composerOpen, setComposerOpen] = useState(false)
   const [editing, setEditing] = useState<Post | null>(null)
@@ -150,6 +157,8 @@ export default function Scheduler() {
     const rawTo = searchParams.get("to")
     if ((rawFrom ?? "") !== parseDayParam(rawFrom)) updates.from = ""
     if ((rawTo ?? "") !== parseDayParam(rawTo)) updates.to = ""
+    const rawView = searchParams.get("view")
+    if (rawView === "queue" || (rawView && !VIEWS.includes(rawView as SchedulerView))) updates.view = ""
     if (Object.keys(updates).length > 0) writeParams(updates)
   }, [searchParams, writeParams])
 
@@ -405,8 +414,8 @@ export default function Scheduler() {
     }
     const scheduledAt = retargetLocalDay(post.scheduledAt, day)
     if (!scheduledAt || scheduledAt === post.scheduledAt) return
-    if (post.status === "scheduled" && !isFutureTime(scheduledAt)) {
-      showToast("Scheduled posts stay in the future.", "error", false)
+    if (!canMovePost(post, scheduledAt)) {
+      showToast("Choose a day in the future.", "error", false)
       return
     }
     const token = queueToken()
@@ -432,19 +441,24 @@ export default function Scheduler() {
     writeParams({ status: next }, "push")
   }
 
-  function openQueue(next: Status | "") {
-    setView("queue")
-    selectStatus(next)
+  function setView(next: SchedulerView) {
+    writeParams({ view: next === "queue" ? "" : next }, "push")
   }
 
-  function retryAll() {
-    if (!posts) return
-    for (const post of posts) {
+  function openQueue(next: Status | "") {
+    const updates: Record<string, string> = { view: "" }
+    if (next !== status) updates.status = next
+    writeParams(updates, "push")
+  }
+
+  function retryAll(targets: readonly Post[]) {
+    for (const post of targets) {
       if (post.status === "failed") void onRetry(post)
     }
   }
 
   const visible = posts ? visiblePosts(posts, { platforms, status, q: draft, from, to }, pendingIds) : []
+  const failedOnScreen = visible.filter((post) => post.status === "failed")
   const groups = posts ? groupPosts(visible, now > 0 ? new Date(now) : new Date()) : []
   const filtersActive = platforms.length > 0 || Boolean(status) || Boolean(draft.trim()) || Boolean(from) || Boolean(to)
   const scoped = posts ? filterPosts(posts, { platforms, status: "", q: draft, from, to }) : []
@@ -508,8 +522,9 @@ export default function Scheduler() {
             counts={counts}
             status={status}
             retrying={pendingIds.length > 0}
+            retryCount={failedOnScreen.length}
             onStatus={(next) => selectStatus(next)}
-            onRetryAll={retryAll}
+            onRetryAll={() => retryAll(failedOnScreen)}
           />
           <FilterBar
             platforms={platforms}
@@ -587,7 +602,14 @@ export default function Scheduler() {
           </div>
         ) : null}
         {phase === "ready" && posts && view === "overview" ? (
-          <Overview posts={posts} now={now} pendingIds={pendingIds} onRetry={onRetry} onRetryAll={retryAll} onOpenQueue={openQueue} />
+          <Overview
+            posts={posts}
+            now={now}
+            pendingIds={pendingIds}
+            onRetry={onRetry}
+            onRetryAll={() => retryAll(posts.filter((post) => post.status === "failed"))}
+            onOpenQueue={openQueue}
+          />
         ) : null}
         {phase === "ready" && visible.length > 0 && queueView ? (
           <QueueList
@@ -629,11 +651,10 @@ export default function Scheduler() {
           <MediaLibrary
             posts={posts}
             onOpen={(post) => {
-              setView("queue")
               const needle = clipGraphemes(post.content, 32).replace(/…$/, "")
               if (searchTimer.current) window.clearTimeout(searchTimer.current)
               setDraft(needle)
-              writeParams({ q: needle })
+              writeParams({ view: "", q: needle }, "push")
             }}
           />
         ) : null}
@@ -672,11 +693,10 @@ export default function Scheduler() {
         onView={setView}
         onClearFilters={clearFilters}
         onOpenPost={(post) => {
-          setView("queue")
           const needle = clipGraphemes(post.content, 32).replace(/…$/, "")
           if (searchTimer.current) window.clearTimeout(searchTimer.current)
           setDraft(needle)
-          writeParams({ q: needle })
+          writeParams({ view: "", q: needle }, "push")
         }}
       />
       {toast ? (

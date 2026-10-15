@@ -525,6 +525,10 @@ export function canEditPost(post: Pick<Post, "status">): boolean {
   return post.status !== "published"
 }
 
+export function canMovePost(post: Pick<Post, "status">, scheduledAt: string, now = Date.now()): boolean {
+  return canEditPost(post) && isFutureTime(scheduledAt, now)
+}
+
 export function duplicateFrom(source: Post, id: string, now = Date.now()): Post {
   const scheduledAt = isFutureTime(source.scheduledAt, now)
     ? source.scheduledAt

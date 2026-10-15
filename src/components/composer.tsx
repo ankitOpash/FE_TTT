@@ -77,7 +77,14 @@ export function Composer({
   })
   const [min] = useState(() => toLocalInputValue(new Date(Date.now() + 60 * 1000)))
   const [openedAt] = useState(when)
-  const draftRef = useRef({ content: "", media: "", when: openedAt, initialWhen: openedAt, saving: false })
+  const draftRef = useRef({
+    content: "",
+    media: "",
+    when: openedAt,
+    initialWhen: openedAt,
+    platforms: initial?.platforms ?? ["instagram"],
+    saving: false,
+  })
   const scheduledAt = localInputToUtc(when)
   const imageError = imageUrlError(mediaUrl) || (mediaUrl.trim() && imageBroken ? "That image URL did not load." : "")
   const shiftWarning = clockShiftNotice(when)
@@ -97,18 +104,21 @@ export function Composer({
   const requestClose = useCallback(() => {
     const draftState = draftRef.current
     if (draftState.saving) return
+    const savedPlatforms = initial?.platforms ?? ["instagram"]
+    const platformDirty = sortPlatforms(draftState.platforms).join() !== sortPlatforms(savedPlatforms).join()
     const dirty = initial
       ? draftState.content !== initial.content ||
         draftState.media !== (initial.mediaUrl ?? "") ||
-        draftState.when !== toLocalInputValue(new Date(initial.scheduledAt))
-      : Boolean(draftState.content.trim() || draftState.media.trim() || draftState.when !== draftState.initialWhen)
+        draftState.when !== toLocalInputValue(new Date(initial.scheduledAt)) ||
+        platformDirty
+      : Boolean(draftState.content.trim() || draftState.media.trim() || draftState.when !== draftState.initialWhen || platformDirty)
     if (dirty && !window.confirm("Discard this draft?")) return
     onClose()
   }, [initial, onClose])
 
   useEffect(() => {
-    draftRef.current = { content, media: mediaUrl, when, initialWhen: openedAt, saving }
-  }, [content, mediaUrl, openedAt, when, saving])
+    draftRef.current = { content, media: mediaUrl, when, initialWhen: openedAt, platforms, saving }
+  }, [content, mediaUrl, openedAt, platforms, when, saving])
 
   useEffect(() => {
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null

@@ -149,3 +149,81 @@ test.describe("on a phone", () => {
     await expect(page.getByRole("button", { name: "Filters, 2 active" })).toBeVisible()
   })
 })
+
+test("retry all follows the failed posts in this week", async ({ page }) => {
+  await forceRandom(page, 0.9)
+  await open(page, "/?status=failed")
+  const kept = page.locator("article").filter({ hasText: "What we stopped posting" })
+  await expect(kept).toBeVisible()
+  await page.getByRole("button", { name: "This week" }).click()
+  await expect(page).toHaveURL(/from=/)
+  await expect(kept).toHaveCount(0)
+  const weekCount = await page.locator("article").count()
+  expect(weekCount).toBeGreaterThan(0)
+  await page.getByRole("button", { name: `Retry all ${weekCount}`, exact: true }).click()
+  await expect(page.locator("article").filter({ hasText: "Retrying" })).toHaveCount(weekCount)
+  await page.getByRole("button", { name: "This week" }).click()
+  await expect(kept).toContainText("X rejected the duplicate status")
+  await expect(kept.getByText("Failed", { exact: true })).toBeVisible()
+})
+
+test("changing only the platforms asks before the edit is discarded", async ({ page }) => {
+  await open(page, "/?status=scheduled")
+  const card = page.locator("article").filter({ hasText: "Lunch special" })
+  await card.getByRole("button", { name: "Post actions" }).click()
+  await page.getByRole("button", { name: "Edit", exact: true }).click()
+  const composer = page.getByRole("dialog", { name: "Edit post" })
+  await composer.getByRole("button", { name: "TikTok", exact: true }).click()
+  page.once("dialog", (popup) => {
+    expect(popup.message()).toBe("Discard this draft?")
+    void popup.dismiss()
+  })
+  await composer.getByRole("button", { name: "Close", exact: true }).click()
+  await expect(composer).toBeVisible()
+  await expect(composer.getByRole("button", { name: "TikTok", exact: true })).toHaveAttribute("aria-pressed", "true")
+})
+
+test("calendar stays in the URL after a refresh", async ({ page }) => {
+  await open(page)
+  await page.getByRole("button", { name: "Calendar", exact: true }).click()
+  await expect(page).toHaveURL(/view=calendar/)
+  await page.reload()
+  await expect(page.getByRole("heading", { level: 1, name: "Calendar" })).toBeVisible()
+  await expect(page.getByRole("button", { name: "Calendar", exact: true })).toHaveAttribute("aria-current", "page")
+  await page.getByRole("button", { name: "Queue", exact: true }).click()
+  await expect(page).not.toHaveURL(/view=/)
+  await page.getByRole("button", { name: "Commands" }).click()
+  await page.getByRole("dialog", { name: "Commands" }).getByRole("button", { name: "Calendar view" }).click()
+  await expect(page).toHaveURL(/view=calendar/)
+  await expect(page.getByRole("button", { name: "Board", exact: true })).toBeVisible()
+})
+
+test("dragging a scheduled post onto another day moves it", async ({ page }) => {
+  await open(page, "/?view=calendar&status=scheduled")
+  const chip = page.getByRole("button", { name: /Lunch special/ })
+  const more = page.getByRole("button", { name: /^\+\d+ more$/ })
+  for (let attempt = 0; attempt < 8 && (await chip.count()) === 0; attempt += 1) {
+    await more.nth(attempt).click()
+  }
+  await expect(chip).toBeVisible()
+  const tomorrow = await page.evaluate(() => {
+    const date = new Date()
+    date.setDate(date.getDate() + 1)
+    const pad = (value: number) => String(value).padStart(2, "0")
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+  })
+  const target = page.locator(`[data-date="${tomorrow}"]`)
+  await page.evaluate((date) => {
+    const chip = [...document.querySelectorAll("button")].find((button) =>
+      (button.getAttribute("aria-label") ?? "").includes("Lunch special"),
+    )
+    const cell = document.querySelector(`[data-date="${date}"]`)
+    if (!(chip instanceof HTMLElement) || !(cell instanceof HTMLElement)) throw new Error("missing drag nodes")
+    const dataTransfer = new DataTransfer()
+    chip.dispatchEvent(new DragEvent("dragstart", { bubbles: true, cancelable: true, dataTransfer }))
+    cell.dispatchEvent(new DragEvent("dragover", { bubbles: true, cancelable: true, dataTransfer }))
+    cell.dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer }))
+  }, tomorrow)
+  await expect(target.getByRole("button", { name: /Lunch special/ })).toBeVisible()
+  await expect(page.getByRole("alert").filter({ hasText: "Post moved." })).toBeVisible()
+})

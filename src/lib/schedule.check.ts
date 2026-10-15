@@ -6,6 +6,7 @@ import {
   applyStoredUpdate,
   blankChannel,
   canEditPost,
+  canMovePost,
   channelProblems,
   channelReady,
   duplicateFrom,
@@ -362,6 +363,10 @@ assert.equal(copy.content, "Copy me")
 assert.equal(canEditPost(source), false)
 assert.equal(canEditPost(post({ id: "open", scheduledAt: future, status: "scheduled" })), true)
 assert.equal(canEditPost(post({ id: "bad", scheduledAt: at(11, 9), status: "failed" })), true)
+assert.equal(canMovePost(post({ id: "open", scheduledAt: future, status: "scheduled" }), future, now.getTime()), true)
+assert.equal(canMovePost(post({ id: "bad", scheduledAt: at(11, 9), status: "failed" }), future, now.getTime()), true)
+assert.equal(canMovePost(post({ id: "bad", scheduledAt: at(11, 9), status: "failed" }), at(11, 9), now.getTime()), false)
+assert.equal(canMovePost(source, future, now.getTime()), false)
 assert.equal(copy.status, "scheduled")
 assert.equal(isFutureTime(copy.scheduledAt, now.getTime()), true)
 assert.equal(

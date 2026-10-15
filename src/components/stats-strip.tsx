@@ -1,6 +1,6 @@
 "use client"
 
-import { AlertTriangle, CalendarClock, Check, CircleAlert, FileText } from "lucide-react"
+import { AlertTriangle, CalendarClock, Check, CircleAlert } from "lucide-react"
 import { STATUSES, type Status } from "@/lib/schedule"
 import styles from "./stats-strip.module.css"
 
@@ -8,12 +8,14 @@ export function StatsStrip({
   counts,
   status,
   retrying,
+  retryCount,
   onStatus,
   onRetryAll,
 }: {
   counts: Record<Status, number>
   status: Status | ""
   retrying: boolean
+  retryCount: number
   onStatus: (status: Status) => void
   onRetryAll: () => void
 }) {
@@ -48,17 +50,10 @@ export function StatsStrip({
           </li>
         )
       })}
-      <li>
-        <div className={styles.metric} data-status="draft">
-          <FileText size={16} aria-hidden="true" />
-          <span>Drafts</span>
-          <strong>0</strong>
-        </div>
-      </li>
-      {counts.failed > 0 ? (
+      {retryCount > 0 ? (
         <li>
           <button type="button" className={styles.retryAll} onClick={onRetryAll} disabled={retrying}>
-            {retrying ? "Retrying…" : "Retry all"}
+            {retrying ? "Retrying…" : `Retry all ${retryCount}`}
           </button>
         </li>
       ) : null}

@@ -107,7 +107,7 @@ The seed file is anchored to 14 October 2026 UTC. `shiftSeed` moves every timest
 
 ## Design
 
-Inter, a light slate canvas, and an optional dark theme stored in `localStorage` as `dispatch.theme`. Indigo is the action color and the scheduled color. Published is green. Failed is rose. Cards use a 14px radius and a hairline border. The sidebar lists Overview, Queue, Calendar, Analytics, Media library, and Settings. Overview is the summary. Queue is the post list. On a phone it stays off-canvas behind Open menu. A right-hand rail on wide screens shows publishing health, the busiest published hour, and the next scheduled post. Those numbers come from the posts in the queue. Drafts stay at 0 because a post is scheduled, published, or failed.
+Inter, a light slate canvas, and an optional dark theme stored in `localStorage` as `dispatch.theme`. Indigo is the action color and the scheduled color. Published is green. Failed is rose. Cards use a 14px radius and a hairline border. The sidebar lists Overview, Queue, Calendar, Board, Analytics, Media library, and Settings. Overview is the summary. Queue is the post list. On a phone it stays off-canvas behind Open menu. A right-hand rail on wide screens shows publishing health, the busiest published hour, and the next scheduled post. Those numbers come from the posts in the queue. A post is scheduled, published, or failed, so the queue has no drafts tile.
 
 Lucide icons are used for Create post, Close, Retry, and a missing image. Platform marks are inline SVGs because Lucide does not ship those logos. Counts use grapheme clusters (`Intl.Segmenter`), so an emoji is one character. Text is never truncated to fit a limit. Counters turn amber from 81% of a limit and red only when the caption is over the limit.
 
@@ -115,14 +115,15 @@ Lucide icons are used for Create post, Close, Retry, and a missing image. Platfo
 
 - Several platforms can be selected. A platform filter matches a post that includes any selected platform. One status can be selected at a time.
 - Search is a case-insensitive trim of the post text. The box keeps its own text and writes `q` to the URL after a short pause, so fast typing is not dropped. Each filter change is applied on top of the latest query, not a stale copy. Platform, status, and date changes push a history entry. Search replaces the current entry. Unknown `platform` and `status` values are removed. `from` and `to` must be real `YYYY-MM-DD` days or they are removed.
-- Query names are `platform`, `status`, `q`, `from`, and `to`. This week writes the local Sunday-through-Saturday range. Stat counts and the status tabs follow platform, search, and date, and still show every status so the queue and the counts stay in step.
+- Query names are `platform`, `status`, `q`, `from`, `to`, and `view`. Queue is the default and omits `view`. Sidebar and the command palette write `view`. This week writes the local Sunday-through-Saturday range. Stat counts and the status tabs follow platform, search, and date, and still show every status so the queue and the counts stay in step. Retry all retries the failed posts in the list on screen, and its label is that count. Overview retries the failed posts it lists.
+- Calendar and board moves have to land in the future. `reschedulePost` rejects a past time for a scheduled or failed post. A published post cannot be moved.
 - Publishing health is published posts divided by published plus failed posts. Scheduled posts are not in that rate. The week bars count published and failed posts on each local day. The busiest hour is the local hour with the most published posts. The next post is the earliest scheduled post still in the future.
 - The sidebar channels open Channel setup. Each platform can store an account name, API key, secret key, and optional webhook in `localStorage` key `dispatch.channels.v1`. Nothing is sent to a platform. The account chip says Demo account.
 - View opens the full post. Edit saves caption, platforms, image, and time back onto a scheduled or failed post and keeps its status. A published post stays as it went out: Edit is unavailable, and the calendar will not move it. Duplicate adds a scheduled copy. Delete removes the post from this browser after a confirmation. These actions stay in local storage.
 - The composer starts with Instagram selected. An image is optional on every platform, including Instagram. A non-http(s) URL, or one that fails to load, blocks scheduling.
 - A successful retry of a future post is `scheduled`. A successful retry of a past post is `published`, so the queue does not contain a scheduled post in the past. This demo still does not call a network to publish.
 - Empty content, no platform, an over-limit platform, a bad image URL, or a time that is not strictly in the future disables Schedule post. The empty-caption message stays quiet until there is something else to correct.
-- Closing a composer that has text, an image URL, or a changed time asks before discarding the draft.
+- Closing a composer that has text, an image URL, a changed time, or a changed platform selection asks before discarding the draft.
 - Character counts are grapheme clusters. They are not X's weighted count, where a URL counts as 23 and some emoji count as 2.
 - There is no login.
 
@@ -133,7 +134,7 @@ Checked on 15 October 2026 in this folder:
 - `npx tsc --noEmit --pretty false --incremental false` exited 0.
 - `npm run check` printed `schedule checks passed`.
 - `npx eslint src e2e --max-warnings 0` exited 0.
-- `npm run test:e2e` built the app, served it on port 3100, and passed all 9 tests in `e2e/scheduler.spec.ts` in 58.7s.
+- `npm run test:e2e` built the app, served it on port 3100, and passed all 13 tests in `e2e/scheduler.spec.ts` in 52.5s.
 - `npm run build` compiled successfully, finished its TypeScript check, and prerendered `/`.
 
 The queue was also exercised in the browser: This week wrote `from` and `to` and changed the visible count from 32 to 21, Clear filters restored 32, search wrote `q`, Create post opened with Schedule disabled for an empty caption, theme toggled, and at 375px the button read `Filters, 2 active` while the sidebar sat off-canvas.

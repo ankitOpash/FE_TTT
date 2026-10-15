@@ -52,7 +52,14 @@ export function Overview({
 
   return (
     <div className={styles.overview}>
-      <StatsStrip counts={counts} status="" retrying={pendingIds.length > 0} onStatus={onOpenQueue} onRetryAll={onRetryAll} />
+      <StatsStrip
+        counts={counts}
+        status=""
+        retrying={pendingIds.length > 0}
+        retryCount={failed.length}
+        onStatus={onOpenQueue}
+        onRetryAll={onRetryAll}
+      />
       <div className={styles.split}>
         <section className={styles.panel} aria-labelledby="needs-attention">
           <header>

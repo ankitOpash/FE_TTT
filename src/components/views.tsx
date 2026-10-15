@@ -142,6 +142,7 @@ export function CalendarView({
             <div
               key={key}
               className={`${styles.cell} ${hoverDay === key ? styles.drop : ""}`}
+              data-date={`${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`}
               data-today={key === todayKey ? "true" : undefined}
               data-outside={outside ? "true" : undefined}
               onDragOver={(event) => {

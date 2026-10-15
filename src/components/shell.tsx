@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import {
   BarChart3,
   CalendarDays,
+  Columns3,
   ImageIcon,
   LayoutDashboard,
   List,
@@ -22,6 +23,7 @@ const NAV: { id: SchedulerView; label: string; icon: typeof List }[] = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
   { id: "queue", label: "Queue", icon: List },
   { id: "calendar", label: "Calendar", icon: CalendarDays },
+  { id: "board", label: "Board", icon: Columns3 },
   { id: "analytics", label: "Analytics", icon: BarChart3 },
   { id: "media", label: "Media library", icon: ImageIcon },
   { id: "settings", label: "Settings", icon: Settings },
