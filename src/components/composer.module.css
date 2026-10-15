@@ -54,7 +54,7 @@
 
 .head h2 {
   margin: 0;
-  font-family: var(--font-display), Georgia, serif;
+  font-family: var(--font-sans), "Segoe UI", sans-serif;
   font-size: 1.4rem;
 }
 
@@ -193,9 +193,22 @@
 }
 
 .ringTrack { stroke: var(--line); }
-.ringOk { stroke: var(--published); }
+.ringOk { stroke: var(--accent); }
 .ringNear { stroke: var(--near); }
 .ringOver { stroke: var(--failed); }
+
+.rings li[data-tone="warn"] {
+  color: var(--near);
+}
+
+.rings li[data-tone="over"] {
+  color: var(--failed);
+}
+
+.rings li[data-tone="warn"] .ringMeta strong,
+.rings li[data-tone="over"] .ringMeta strong {
+  color: inherit;
+}
 
 .rings text {
   fill: var(--ink);
@@ -244,6 +257,77 @@
 .pending {
   position: absolute;
   opacity: 0;
+}
+
+.drop {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+}
+
+.dropHot {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--card));
+}
+
+.samples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.sample {
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  cursor: pointer;
+}
+
+.sample img {
+  display: block;
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+}
+
+.sample[aria-pressed="true"] {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.previewTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.previewTabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  cursor: pointer;
+}
+
+.previewTabs button[aria-selected="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.xRing {
+  margin-left: auto;
 }
 
 .preview {

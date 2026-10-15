@@ -1,14 +1,75 @@
-.shell {
-  width: min(960px, 100%);
-  margin: 0 auto;
-  padding: 0 var(--space-2) 96px;
+.app {
+  display: grid;
+  grid-template-columns: 248px minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+.column {
+  min-width: 0;
+  padding-bottom: 96px;
+}
+
+.workspace,
+.workspaceSingle {
+  display: grid;
+  align-items: start;
+  gap: 16px;
+  padding: 0 24px;
+}
+
+.primaryCol {
+  min-width: 0;
+}
+
+.workspace {
+  grid-template-columns: minmax(0, 1fr) 280px;
+}
+
+.scrim {
+  display: none;
 }
 
 .zone,
 .quiet {
-  margin: var(--space-1) 0 0;
+  margin: var(--space-1) 24px 0;
   color: var(--muted);
   font-size: var(--meta);
+}
+
+.zone {
+  margin-right: 0;
+  margin-left: 0;
+}
+
+@media (max-width: 1099px) {
+  .workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 767px) {
+  .app {
+    display: block;
+  }
+
+  .workspace,
+  .workspaceSingle {
+    padding: 0 16px;
+  }
+
+  .scrim {
+    position: fixed;
+    inset: 0;
+    z-index: calc(var(--z-sheet) - 1);
+    display: block;
+    border: 0;
+    background: rgba(15, 23, 42, 0.45);
+  }
+
+  .quiet {
+    margin-left: 16px;
+    margin-right: 16px;
+  }
 }
 
 .quiet {
@@ -71,6 +132,14 @@
   background: var(--ink);
   color: var(--bg);
   box-shadow: var(--shadow-lift);
+}
+
+.toastOk {
+  border: 1px solid color-mix(in srgb, var(--scheduled) 45%, transparent);
+}
+
+.toastError {
+  border: 1px solid color-mix(in srgb, var(--failed) 55%, transparent);
 }
 
 .toast button {

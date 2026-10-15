@@ -1,6 +1,7 @@
 "use client"
 
-import { X } from "lucide-react"
+import { useEffect, useRef, type RefObject } from "react"
+import { Search, X } from "lucide-react"
 import {
   PLATFORM_LABEL,
   PLATFORMS,
@@ -25,6 +26,11 @@ export function FilterBar({
   onStatus,
   onClear,
   onClearQuery,
+  rangeLabel,
+  onClearRange,
+  inputRef,
+  onQuery,
+  onQueryBlur,
 }: {
   platforms: Platform[]
   status: Status | ""
@@ -39,8 +45,27 @@ export function FilterBar({
   onStatus: (status: Status | "") => void
   onClear: () => void
   onClearQuery: () => void
+  rangeLabel: string
+  onClearRange: () => void
+  inputRef: RefObject<HTMLInputElement | null>
+  onQuery: (value: string) => void
+  onQueryBlur: (value: string) => void
 }) {
-  const active = platforms.length + (status ? 1 : 0) + (query.trim() ? 1 : 0)
+  const barRef = useRef<HTMLDivElement>(null)
+  const active = platforms.length + (status ? 1 : 0) + (query.trim() ? 1 : 0) + (rangeLabel ? 1 : 0)
+
+  useEffect(() => {
+    const node = barRef.current
+    if (!node) return
+    const apply = () => document.documentElement.style.setProperty("--filter-h", `${node.offsetHeight}px`)
+    apply()
+    const observer = new ResizeObserver(apply)
+    observer.observe(node)
+    return () => {
+      observer.disconnect()
+      document.documentElement.style.removeProperty("--filter-h")
+    }
+  }, [])
   const controls = (
     <>
       <div className={styles.row}>
@@ -54,6 +79,7 @@ export function FilterBar({
               key={platform}
               type="button"
               className={styles.chip}
+              data-platform={platform}
               aria-pressed={platforms.includes(platform)}
               onClick={() => onTogglePlatform(platform)}
             >
@@ -89,7 +115,19 @@ export function FilterBar({
   )
 
   return (
-    <div className={styles.bar}>
+    <div className={styles.bar} ref={barRef}>
+      <label className={styles.search}>
+        <Search size={16} aria-hidden="true" />
+        <input
+          ref={inputRef}
+          value={query}
+          onChange={(event) => onQuery(event.target.value)}
+          onBlur={(event) => onQueryBlur(event.target.value)}
+          placeholder="Search posts"
+          type="search"
+          aria-label="Search"
+        />
+      </label>
       <button
         type="button"
         className={styles.sheetToggle}
@@ -132,8 +170,16 @@ export function FilterBar({
               </button>
             </span>
           ) : null}
+          {rangeLabel ? (
+            <span className={styles.active}>
+              {rangeLabel}
+              <button type="button" aria-label="Remove date range" onClick={onClearRange}>
+                <X size={14} aria-hidden="true" />
+              </button>
+            </span>
+          ) : null}
           <button type="button" className={styles.clear} onClick={onClear}>
-            Clear all
+            Clear filters
           </button>
         </div>
       ) : null}

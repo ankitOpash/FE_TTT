@@ -1,27 +1,55 @@
 .strip {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--space-1);
-  margin: 0;
+  margin: 8px 0 12px;
   padding: 0;
   list-style: none;
 }
 
-.strip button {
-  display: inline-flex;
+.strip button,
+.metric {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-1);
+  gap: 6px 8px;
   min-height: 44px;
-  padding: 0 12px;
+  padding: 10px 12px;
   border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: 14px;
   background: var(--card);
+  box-shadow: var(--shadow);
+}
+
+.strip button {
+  width: 100%;
   cursor: pointer;
+  text-align: left;
+}
+
+.strip strong {
+  margin-left: auto;
+  font-size: 1.15rem;
 }
 
 .strip button[aria-pressed="true"] {
   border-color: var(--accent);
   color: var(--accent);
+}
+
+.strip button[data-status="scheduled"][aria-pressed="true"] {
+  border-color: var(--scheduled);
+  color: var(--scheduled);
+}
+
+.strip button[data-status="published"][aria-pressed="true"] {
+  border-color: var(--published);
+  color: var(--published);
+}
+
+.strip button[data-status="failed"][aria-pressed="true"] {
+  border-color: var(--failed);
+  color: var(--failed);
 }
 
 .failed {
@@ -47,4 +75,10 @@
 .retryAll:disabled {
   cursor: progress;
   opacity: 0.7;
+}
+
+@media (max-width: 767px) {
+  .strip {
+    grid-template-columns: 1fr 1fr;
+  }
 }

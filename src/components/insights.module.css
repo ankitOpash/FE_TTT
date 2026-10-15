@@ -1,0 +1,163 @@
+.rail,
+.embedded {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+}
+
+@media (max-width: 1099px) {
+  .rail {
+    display: none;
+  }
+}
+
+.card {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+
+.card h2,
+.card header p,
+.note,
+.legend,
+.rate span {
+  margin: 0;
+}
+
+.card h2 {
+  font-size: 0.95rem;
+}
+
+.card header p,
+.note,
+.legend,
+.rate span {
+  color: var(--muted);
+  font-size: var(--meta);
+}
+
+.rate {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+}
+
+.rate strong,
+.hour {
+  margin: 0;
+  font-size: 1.6rem;
+  letter-spacing: -0.03em;
+}
+
+.bars {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  height: 96px;
+}
+
+.barCol {
+  display: grid;
+  grid-template-rows: 1fr auto;
+  gap: 6px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
+}
+
+.track {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+  min-height: 0;
+}
+
+.track span {
+  display: block;
+  width: 6px;
+  border-radius: 999px 999px 2px 2px;
+}
+
+.published {
+  background: var(--published);
+}
+
+.failed {
+  background: var(--failed);
+}
+
+.legend {
+  display: flex;
+  gap: 12px;
+}
+
+.platforms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.platforms li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: var(--meta);
+}
+
+.library {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.library button {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+  text-align: left;
+  cursor: pointer;
+}
+
+.library img,
+.missing {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 10px;
+  background: var(--bg);
+}
+
+.missing {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: var(--meta);
+}
+
+.library span {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 13px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}

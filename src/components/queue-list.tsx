@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { isEarlierGroup, type Post } from "@/lib/schedule"
-import { PostCard } from "./post-card"
+import { PostCard, type CardAction } from "./post-card"
 import styles from "./queue-list.module.css"
 
 function DaySection({
@@ -13,7 +13,7 @@ function DaySection({
   freshIds,
   shakeIds,
   onRetry,
-  onDemo,
+  onAction,
 }: {
   label: string
   posts: Post[]
@@ -22,7 +22,7 @@ function DaySection({
   freshIds: readonly string[]
   shakeIds: readonly string[]
   onRetry: (post: Post) => void
-  onDemo: () => void
+  onAction: (action: CardAction, post: Post) => void
 }) {
   return (
     <section className={styles.day} aria-label={`${label}, ${posts.length} ${posts.length === 1 ? "post" : "posts"}`}>
@@ -40,7 +40,7 @@ function DaySection({
             fresh={freshIds.includes(post.id)}
             shake={shakeIds.includes(post.id)}
             onRetry={onRetry}
-            onDemo={onDemo}
+            onAction={onAction}
           />
         ))}
       </div>
@@ -67,7 +67,7 @@ export function QueueList({
   freshIds,
   shakeIds,
   onRetry,
-  onDemo,
+  onAction,
 }: {
   groups: { label: string; posts: Post[] }[]
   now: number
@@ -76,14 +76,14 @@ export function QueueList({
   freshIds: readonly string[]
   shakeIds: readonly string[]
   onRetry: (post: Post) => void
-  onDemo: () => void
+  onAction: (action: CardAction, post: Post) => void
 }) {
   const [open, setOpen] = useState(false)
   const clock = now > 0 ? new Date(now) : null
   const upcoming = clock ? groups.filter((group) => !isEarlierGroup(group, clock)) : groups
   const earlier = clock ? groups.filter((group) => isEarlierGroup(group, clock)) : []
   const earlierCount = earlier.reduce((sum, group) => sum + group.posts.length, 0)
-  const shared = { now, pendingIds, freshIds, shakeIds, onRetry, onDemo }
+  const shared = { now, pendingIds, freshIds, shakeIds, onRetry, onAction }
 
   return (
     <div className={styles.list}>

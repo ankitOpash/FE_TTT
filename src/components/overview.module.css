@@ -1,0 +1,119 @@
+.overview {
+  display: grid;
+  gap: 16px;
+}
+
+.split {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.panel {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+
+.panel header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.panel h2,
+.panel p,
+.panel ul {
+  margin: 0;
+}
+
+.panel h2 {
+  font-size: 0.95rem;
+}
+
+.panel header button,
+.panel li button {
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  cursor: pointer;
+}
+
+.panel header button {
+  padding: 0 12px;
+  color: var(--accent);
+}
+
+.panel > ul {
+  display: grid;
+  gap: 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.panel > ul > li {
+  display: grid;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.panel time {
+  font-weight: 650;
+}
+
+.panel time + span,
+.empty,
+.error,
+.platforms {
+  color: var(--muted);
+  font-size: var(--meta);
+}
+
+.error {
+  color: var(--failed);
+}
+
+.panel > ul > li > button {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 6px;
+  padding: 0 12px;
+  border-color: var(--failed);
+  color: var(--failed);
+}
+
+.panel > ul > li > button:disabled {
+  cursor: progress;
+}
+
+.platforms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.platforms li {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+}
+
+@media (max-width: 767px) {
+  .split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

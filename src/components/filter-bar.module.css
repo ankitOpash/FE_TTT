@@ -1,7 +1,48 @@
 .bar {
+  position: sticky;
+  top: var(--nav-h, 64px);
+  z-index: calc(var(--z-sticky) + 1);
   display: grid;
   gap: var(--gap);
-  margin: var(--space-2) 0;
+  margin: 0 0 var(--space-2);
+  padding: var(--space-1) 0;
+}
+
+.bar::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 1px 0 var(--line);
+}
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+}
+
+.search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+}
+
+.search input:focus {
+  outline: none;
+}
+
+.search:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .sheetToggle {
@@ -60,6 +101,34 @@
   border-color: var(--accent);
   background: var(--accent);
   color: var(--accent-ink);
+}
+
+.chip[data-platform="facebook"][aria-pressed="true"] {
+  border-color: #1877f2;
+  background: color-mix(in srgb, #1877f2 16%, var(--card));
+  color: var(--ink);
+}
+
+.chip[data-platform="instagram"][aria-pressed="true"] {
+  border-color: #c13584;
+  background: color-mix(in srgb, #c13584 14%, var(--card));
+  color: var(--ink);
+}
+
+.chip[data-platform="x"][aria-pressed="true"] {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.chip[data-platform="x"][aria-pressed="true"] svg {
+  color: var(--bg);
+}
+
+.chip[data-platform="tiktok"][aria-pressed="true"] {
+  border-color: #fe2c55;
+  background: color-mix(in srgb, #fe2c55 14%, var(--card));
+  color: var(--ink);
 }
 
 .tabs {

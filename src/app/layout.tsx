@@ -1,14 +1,9 @@
 import type { Metadata } from "next";
-import { Fraunces, Outfit } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
 
-const sans = Outfit({
+const sans = Inter({
   variable: "--font-sans",
-  subsets: ["latin"],
-});
-
-const display = Fraunces({
-  variable: "--font-display",
   subsets: ["latin"],
 });
 
@@ -19,7 +14,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${sans.variable} ${display.variable}`} suppressHydrationWarning>
+    <html lang="en" className={sans.variable} suppressHydrationWarning>
       <body suppressHydrationWarning>
         <script
           dangerouslySetInnerHTML={{

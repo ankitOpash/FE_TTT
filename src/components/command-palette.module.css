@@ -11,24 +11,45 @@
   position: absolute;
   inset: 0;
   border: 0;
-  background: rgba(24, 24, 27, 0.45);
+  background: rgba(15, 23, 42, 0.55);
+  cursor: pointer;
 }
 
 .dialog {
   position: relative;
+  z-index: 1;
   display: grid;
   gap: var(--space-1);
-  width: min(420px, 100%);
+  width: min(520px, 100%);
   padding: var(--space-1);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--card);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--card) 92%, transparent);
   box-shadow: var(--shadow-lift);
+  backdrop-filter: blur(16px);
+}
+
+.dialog input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.list {
+  display: grid;
+  max-height: min(360px, 50vh);
+  overflow: auto;
 }
 
 .dialog button {
+  display: grid;
+  gap: 2px;
+  width: 100%;
   min-height: 44px;
-  padding: 0 12px;
+  padding: 8px 12px;
   border: 0;
   border-radius: 8px;
   background: transparent;
@@ -36,6 +57,18 @@
   cursor: pointer;
 }
 
+.dialog button small {
+  color: var(--muted);
+  font-size: var(--meta);
+}
+
+.dialog button[data-active="true"],
 .dialog button:hover {
-  background: var(--bg);
+  background: color-mix(in srgb, var(--accent) 12%, var(--card));
+}
+
+.empty {
+  margin: 0;
+  padding: 8px 12px;
+  color: var(--muted);
 }

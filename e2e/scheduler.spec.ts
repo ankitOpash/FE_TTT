@@ -79,7 +79,7 @@ test("the composer cannot be discarded while a post is saving", async ({ page })
     void dialog.accept()
   })
   await open(page)
-  await page.getByRole("button", { name: "New post" }).first().click()
+  await page.getByRole("button", { name: "Create post" }).first().click()
   await page.getByRole("textbox", { name: "Post" }).fill("Saving guard check")
   await page.getByRole("button", { name: "Schedule post" }).click()
 
@@ -95,7 +95,7 @@ test("the composer cannot be discarded while a post is saving", async ({ page })
 
 test("counters use graphemes and block only real overflows", async ({ page }) => {
   await open(page)
-  await page.getByRole("button", { name: "New post" }).first().click()
+  await page.getByRole("button", { name: "Create post" }).first().click()
   await page.getByRole("dialog").getByRole("button", { name: "X", exact: true }).click()
   const caption = page.getByRole("textbox", { name: "Post" })
   const schedule = page.getByRole("button", { name: "Schedule post" })
@@ -114,7 +114,7 @@ test.describe("in Pacific/Auckland", () => {
 
   test("a post just after local midnight lands under Tomorrow and is stored in UTC", async ({ page }) => {
     await open(page)
-    await page.getByRole("button", { name: "New post" }).first().click()
+    await page.getByRole("button", { name: "Create post" }).first().click()
     await page.getByRole("textbox", { name: "Post" }).fill("Auckland midnight check")
     const tomorrow = await page.evaluate(() => {
       const date = new Date()
